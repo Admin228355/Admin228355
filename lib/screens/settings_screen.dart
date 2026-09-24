@@ -1,3 +1,4 @@
+import '../config/free_edition.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -391,7 +392,7 @@ class SettingsScreen extends StatelessWidget {
                     trailing: const SettingsChevron(),
                     onTap: onTerms,
                   ),
-                  SettingsRow(
+                  if (!kFreeEdition) SettingsRow(
                     icon: Icons.mail_rounded,
                     title: s.supportTitle,
                     subtitle: SettingsScreen.supportEmail,
@@ -401,14 +402,14 @@ class SettingsScreen extends StatelessWidget {
                   // Официальные обращения идут в отдельный ящик: письма от
                   // магазинов, юристов и правообладателей нельзя терять в
                   // потоке жалоб на ошибки.
-                  SettingsRow(
+                  if (!kFreeEdition) SettingsRow(
                     icon: Icons.gavel_rounded,
                     title: s.officialTitle,
                     subtitle: SettingsScreen.officialEmail,
                     trailing: const SettingsChevron(),
                     onTap: onOfficial,
                   ),
-                  SettingsRow(
+                  if (!kFreeEdition) SettingsRow(
                     icon: Icons.campaign_rounded,
                     title: s.telegramChannelTitle,
                     subtitle: s.telegramChannelHint,
@@ -418,7 +419,7 @@ class SettingsScreen extends StatelessWidget {
                   SettingsRow(
                     icon: Icons.bug_report_rounded,
                     title: s.bugBotTitle,
-                    subtitle: s.bugBotHint,
+                    subtitle: kFreeEdition ? 'GitHub Issues' : s.bugBotHint,
                     trailing: const SettingsChevron(),
                     onTap: onBugBot,
                   ),

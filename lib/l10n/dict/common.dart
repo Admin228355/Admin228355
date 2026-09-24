@@ -8,12 +8,12 @@
 const Map<String, Map<String, String>> commonStrings = {
   'brokenInstallTitle': {
     'ru': 'Приложение установлено не полностью',
-    'en': 'Togetherly is only half installed',
-    'pt': 'O Togetherly está instalado pela metade',
-    'it': 'Togetherly è installato a metà',
-    'es': 'Togetherly está instalado a medias',
-    'fr': 'Togetherly n’est installé qu’à moitié',
-    'de': 'Togetherly ist nur halb installiert',
+    'en': 'TogetherForever is only half installed',
+    'pt': 'O TogetherForever está instalado pela metade',
+    'it': 'TogetherForever è installato a metà',
+    'es': 'TogetherForever está instalado a medias',
+    'fr': 'TogetherForever n’est installé qu’à moitié',
+    'de': 'TogetherForever ist nur halb installiert',
   },
   'brokenInstallBody': {
     'ru': 'Часть файлов не доехала до телефона — так бывает после переноса приложений со старого телефона, клонирования и установки со стороны. Переустановите из Google Play: всё, что вы с партнёром сохранили, лежит у нас и вернётся после входа.',

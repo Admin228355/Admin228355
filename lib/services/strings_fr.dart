@@ -365,15 +365,15 @@ class _FrStrings extends _EnStrings {
 
   @override
   String shareInviteText(String code, String link) =>
-      'Rejoins-moi sur Togetherly ! Code : $code\n\nOu clique ici : $link';
+      'Rejoins-moi sur TogetherForever ! Code : $code\n\nOu clique ici : $link';
 
   @override
   String shareGroupInviteText(String code, String link) =>
-      'Rejoins notre groupe sur Togetherly ! Code : $code\n\n'
+      'Rejoins notre groupe sur TogetherForever ! Code : $code\n\n'
       'Ou clique ici : $link';
 
   @override
-  String joinMeLinkText(String link) => 'Rejoins-moi sur Togetherly ! $link';
+  String joinMeLinkText(String link) => 'Rejoins-moi sur TogetherForever ! $link';
 
   @override
   String connectedWithCouple(String name) => 'Te voilà relié à $name !';
@@ -481,7 +481,7 @@ class _FrStrings extends _EnStrings {
 
   @override
   String memoryFileTooBigPlusHint(int limitMb) =>
-      'Le fichier dépasse $limitMb Mo. Togetherly+ double la limite';
+      'Le fichier dépasse $limitMb Mo. TogetherForever+ double la limite';
 
   @override
   String selectedCount(int n) => '$n sélectionnés';

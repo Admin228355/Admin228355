@@ -40,6 +40,6 @@
     <string name="tg_canvas_empty">Нарисуйте что-нибудь вдвоём</string>
     <string name="tg_canvas_pick_title">Какой рисунок показывать</string>
     <string name="tg_canvas_pick_subtitle">Нажмите на холст, и он встанет на стол</string>
-    <string name="tg_canvas_pick_empty">Рисунков пока нет. Откройте Togetherly и нарисуйте первый.</string>
+    <string name="tg_canvas_pick_empty">Рисунков пока нет. Откройте TogetherForever и нарисуйте первый.</string>
     <string name="tg_canvas_unnamed">Без названия</string>
 </resources>

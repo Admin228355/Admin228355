@@ -1,3 +1,4 @@
+import '../config/brand.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -23,10 +24,7 @@ class PocketBaseService {
   /// Базовый URL PocketBase (HTTPS, Let's Encrypt; домен держит DuckDNS).
   /// Переопределяется под свой бэкенд: `--dart-define=PB_URL=https://...`
   /// По умолчанию — прод-инстанс автора.
-  static const String baseUrl = String.fromEnvironment(
-    'PB_URL',
-    defaultValue: 'https://togetherly.day',
-  );
+  static const String baseUrl = Brand.serverUrl;
 
   /// Ключ хранения сериализованной auth-сессии.
   static const String _authPrefsKey = 'pb_auth';

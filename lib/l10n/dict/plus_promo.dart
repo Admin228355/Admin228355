@@ -2,13 +2,13 @@
 
 const Map<String, Map<String, String>> plusPromoStrings = {
   'plusPromoTitle': {
-    'ru': 'Togetherly+',
-    'en': 'Togetherly+',
-    'pt': 'Togetherly+',
-    'it': 'Togetherly+',
-    'es': 'Togetherly+',
-    'fr': 'Togetherly+',
-    'de': 'Togetherly+',
+    'ru': 'TogetherForever+',
+    'en': 'TogetherForever+',
+    'pt': 'TogetherForever+',
+    'it': 'TogetherForever+',
+    'es': 'TogetherForever+',
+    'fr': 'TogetherForever+',
+    'de': 'TogetherForever+',
   },
   'plusPromoBody': {
     'ru': 'Свои настроения, календарь цикла, статистика пары, все виджеты и '

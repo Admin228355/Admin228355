@@ -32,7 +32,7 @@ class ExportService {
     try {
       final tempDir = await getTemporaryDirectory();
       final zipPath =
-          '${tempDir.path}/Togetherly_${DateTime.now().millisecondsSinceEpoch}.zip';
+          '${tempDir.path}/TogetherForever_${DateTime.now().millisecondsSinceEpoch}.zip';
       final zip = ZipFileEncoder()..create(zipPath);
 
       // 1. Таймеры. Символ в текстовую выгрузку не пишем: с версии 1.20 там

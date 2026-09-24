@@ -369,15 +369,15 @@ class _PtStrings extends _EnStrings {
 
   @override
   String shareInviteText(String code, String link) =>
-      'Venha para o Togetherly comigo! Código: $code\n\nOu clique aqui: $link';
+      'Venha para o TogetherForever comigo! Código: $code\n\nOu clique aqui: $link';
 
   @override
   String shareGroupInviteText(String code, String link) =>
-      'Entre no nosso grupo no Togetherly! Código: $code\n\n'
+      'Entre no nosso grupo no TogetherForever! Código: $code\n\n'
       'Ou clique aqui: $link';
 
   @override
-  String joinMeLinkText(String link) => 'Venha para o Togetherly comigo! $link';
+  String joinMeLinkText(String link) => 'Venha para o TogetherForever comigo! $link';
 
   @override
   String connectedWithCouple(String name) => 'Agora você está com $name!';
@@ -484,7 +484,7 @@ class _PtStrings extends _EnStrings {
 
   @override
   String memoryFileTooBigPlusHint(int limitMb) =>
-      'O arquivo passa de $limitMb MB. O Togetherly+ dobra o limite';
+      'O arquivo passa de $limitMb MB. O TogetherForever+ dobra o limite';
 
   @override
   String selectedCount(int n) => '$n selecionados';

@@ -78,7 +78,7 @@ object MediaSaveEngine {
                 offsetMinutes = (a["offsetMinutes"] as? Number)?.toInt() ?: 0,
                 latitude = (a["latitude"] as? Number)?.toDouble(),
                 longitude = (a["longitude"] as? Number)?.toDouble(),
-                name = a["name"] as? String ?: "Togetherly",
+                name = a["name"] as? String ?: "TogetherForever",
                 album = a["album"] as? String ?: GallerySaver.DEFAULT_ALBUM,
                 title = a["title"] as? String ?: "",
             )

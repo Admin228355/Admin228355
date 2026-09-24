@@ -1,3 +1,4 @@
+import 'config/brand.dart';
 import 'config/free_edition.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -295,6 +296,13 @@ Future<void> _homeWidgetBackgroundCallback(Uri? uri) async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // TogetherForever не ходит на сервер автора Togetherly: адрес своего
+  // сервера задаётся при сборке. Без него честно говорим, что делать.
+  if (!Brand.hasServer) {
+    runApp(const _NoServerApp());
+    return;
+  }
 
   // Android отдаёт приложению 60 Гц, даже когда экран умеет 120: анимации и
   // перемотка видео на глаз становятся ступенчатыми. Просим максимум.
@@ -935,7 +943,7 @@ class _LoveAppState extends State<LoveApp> with WidgetsBindingObserver {
       // поэтому единый стиль меню сразу подхватывает новый акцент.
       listenable: Listenable.merge([LocaleService.instance, _userData]),
       builder: (context, _) => MaterialApp(
-        title: 'Togetherly',
+        title: 'TogetherForever',
         debugShowCheckedModeBanner: false,
         navigatorKey: LoveApp.rootNavigatorKey,
         theme: _themeFor(_userData.theme),
@@ -992,5 +1000,33 @@ class _LoveAppState extends State<LoveApp> with WidgetsBindingObserver {
     }
     // 3. Профиль не заполнен — на экран входа
     return WelcomeScreen(userData: _userData);
+  }
+}
+
+/// Сборка без `--dart-define=PB_URL=...`: подсказка вместо падения на старте.
+class _NoServerApp extends StatelessWidget {
+  const _NoServerApp();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(colorSchemeSeed: const Color(0xFFE75480)),
+      home: const Scaffold(
+        body: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Center(
+              child: Text(
+                '${Brand.appName}: сервер не настроен.\n\n'
+                'Соберите приложение с --dart-define=PB_URL=https://ваш-домен '
+                '(см. server/README.md в репозитории).',
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

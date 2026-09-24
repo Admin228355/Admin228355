@@ -97,7 +97,7 @@ class _VesselStoryScreenState extends State<VesselStoryScreen> {
     setState(() => _busy = true);
     try {
       final file = await _render();
-      await Gal.putImage(file.path, album: 'Togetherly');
+      await Gal.putImage(file.path, album: 'TogetherForever');
       if (mounted) AppSnack.success(context, _s.savedToGallery);
     } catch (e) {
       debugPrint('сосуд: сохранить не вышло: $e');

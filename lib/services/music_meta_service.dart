@@ -1,3 +1,4 @@
+import '../config/brand.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -42,10 +43,7 @@ class MusicMetaService {
 
   /// Адрес своего PocketBase. Держим строкой, чтобы сервис не тянул за собой
   /// весь клиент PB ради одного запроса.
-  static const String pbBaseUrl = String.fromEnvironment(
-    'PB_URL',
-    defaultValue: 'https://togetherly.day',
-  );
+  static const String pbBaseUrl = Brand.serverUrl;
 
   /// Номер трека из ссылки: `/album/<id>/track/<id>`, `/track/<id>`.
   static String? yandexTrackId(String url) {

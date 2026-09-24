@@ -365,15 +365,15 @@ class _EsStrings extends _EnStrings {
 
   @override
   String shareInviteText(String code, String link) =>
-      '¡Únete a mí en Togetherly! Código: $code\n\nO pulsa aquí: $link';
+      '¡Únete a mí en TogetherForever! Código: $code\n\nO pulsa aquí: $link';
 
   @override
   String shareGroupInviteText(String code, String link) =>
-      '¡Únete a nuestro grupo en Togetherly! Código: $code\n\n'
+      '¡Únete a nuestro grupo en TogetherForever! Código: $code\n\n'
       'O pulsa aquí: $link';
 
   @override
-  String joinMeLinkText(String link) => '¡Únete a mí en Togetherly! $link';
+  String joinMeLinkText(String link) => '¡Únete a mí en TogetherForever! $link';
 
   @override
   String connectedWithCouple(String name) => '¡Ya estás unido a $name!';
@@ -478,7 +478,7 @@ class _EsStrings extends _EnStrings {
 
   @override
   String memoryFileTooBigPlusHint(int limitMb) =>
-      'El archivo pasa de $limitMb MB. Togetherly+ dobla el límite';
+      'El archivo pasa de $limitMb MB. TogetherForever+ dobla el límite';
 
   @override
   String selectedCount(int n) => '$n seleccionados';

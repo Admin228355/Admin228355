@@ -1,3 +1,4 @@
+import '../../../config/brand.dart';
 import 'package:flutter/material.dart';
 import '../../../utils/safe_launch.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -51,7 +52,7 @@ Future<bool?> showCycleConsentSheet(
             const SizedBox(height: 12),
             TextButton.icon(
               onPressed: () => safeLaunchUrl(
-                Uri.parse('https://togetherly.day/privacy-policy'),
+                Uri.parse(Brand.privacyPolicyUrl),
                 mode: LaunchMode.externalApplication,
               ),
               icon: Icon(Icons.open_in_new_rounded,

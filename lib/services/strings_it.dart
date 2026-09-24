@@ -373,15 +373,15 @@ class _ItStrings extends _EnStrings {
 
   @override
   String shareInviteText(String code, String link) =>
-      'Unisciti a me su Togetherly! Codice: $code\n\nO clicca qui: $link';
+      'Unisciti a me su TogetherForever! Codice: $code\n\nO clicca qui: $link';
 
   @override
   String shareGroupInviteText(String code, String link) =>
-      'Unisciti al nostro gruppo su Togetherly! Codice: $code\n\n'
+      'Unisciti al nostro gruppo su TogetherForever! Codice: $code\n\n'
       'O clicca qui: $link';
 
   @override
-  String joinMeLinkText(String link) => 'Unisciti a me su Togetherly! $link';
+  String joinMeLinkText(String link) => 'Unisciti a me su TogetherForever! $link';
 
   @override
   String connectedWithCouple(String name) => 'Ora sei in coppia con $name!';
@@ -488,7 +488,7 @@ class _ItStrings extends _EnStrings {
 
   @override
   String memoryFileTooBigPlusHint(int limitMb) =>
-      'Il file supera $limitMb MB. Togetherly+ raddoppia il limite';
+      'Il file supera $limitMb MB. TogetherForever+ raddoppia il limite';
 
   @override
   String selectedCount(int n) => '$n selezionati';

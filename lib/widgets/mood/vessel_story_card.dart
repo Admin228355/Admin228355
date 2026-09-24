@@ -1,3 +1,4 @@
+import '../../config/brand.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/mood_vessel.dart';
@@ -88,7 +89,7 @@ class VesselStoryCard extends StatelessWidget {
           : CrossAxisAlignment.start,
       children: [
         Text(
-          'Togetherly',
+          'TogetherForever',
           style: AppFonts.unbounded(
             size: size,
             weight: 800,
@@ -98,7 +99,7 @@ class VesselStoryCard extends StatelessWidget {
         ),
         const SizedBox(height: 3),
         Text(
-          'togetherly.day',
+          Brand.appName,
           style: AppFonts.onest(size: 10, weight: 500, color: _muted),
         ),
       ],

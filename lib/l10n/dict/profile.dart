@@ -272,19 +272,19 @@ const Map<String, Map<String, String>> profileStrings = {
   },
   'anniversaryTodayBody': {
     'ru':
-        'Поздравляем вас с годовщиной вместе! Откройте Togetherly, чтобы отметить этот день.',
+        'Поздравляем вас с годовщиной вместе! Откройте TogetherForever, чтобы отметить этот день.',
     'en':
-        'Congratulations on your anniversary together! Open Togetherly to celebrate.',
+        'Congratulations on your anniversary together! Open TogetherForever to celebrate.',
     'pt':
-        'Parabéns pelo aniversário de vocês! Abra o Togetherly para comemorar.',
+        'Parabéns pelo aniversário de vocês! Abra o TogetherForever para comemorar.',
     'it':
-        'Congratulazioni per il vostro anniversario! Apri Togetherly per festeggiare.',
+        'Congratulazioni per il vostro anniversario! Apri TogetherForever per festeggiare.',
     'es':
-        '¡Enhorabuena por vuestro aniversario! Abre Togetherly para celebrarlo.',
+        '¡Enhorabuena por vuestro aniversario! Abre TogetherForever para celebrarlo.',
     'fr':
-        'Félicitations pour votre anniversaire ! Ouvre Togetherly pour le fêter.',
+        'Félicitations pour votre anniversaire ! Ouvre TogetherForever pour le fêter.',
     'de':
-        'Herzlichen Glückwunsch zu eurem Jahrestag! Öffne Togetherly und feiert den Tag.',
+        'Herzlichen Glückwunsch zu eurem Jahrestag! Öffne TogetherForever und feiert den Tag.',
   },
   'birthdayTodayTitle': {
     'ru': '🎂 С днём рождения!',
@@ -297,14 +297,14 @@ const Map<String, Map<String, String>> profileStrings = {
   },
   'birthdayTodayBody': {
     'ru':
-        'Сегодня ваш особенный день! Откройте Togetherly, чтобы отметить его вместе.',
-    'en': 'Today is your special day! Open Togetherly to celebrate together.',
-    'pt': 'Hoje é o seu dia! Abra o Togetherly para comemorar junto.',
-    'it': 'Oggi è il tuo giorno! Apri Togetherly per festeggiare insieme.',
-    'es': '¡Hoy es tu día! Abre Togetherly para celebrarlo juntos.',
-    'fr': 'C’est ton jour spécial ! Ouvre Togetherly pour le fêter ensemble.',
+        'Сегодня ваш особенный день! Откройте TogetherForever, чтобы отметить его вместе.',
+    'en': 'Today is your special day! Open TogetherForever to celebrate together.',
+    'pt': 'Hoje é o seu dia! Abra o TogetherForever para comemorar junto.',
+    'it': 'Oggi è il tuo giorno! Apri TogetherForever per festeggiare insieme.',
+    'es': '¡Hoy es tu día! Abre TogetherForever para celebrarlo juntos.',
+    'fr': 'C’est ton jour spécial ! Ouvre TogetherForever pour le fêter ensemble.',
     'de':
-        'Heute ist dein besonderer Tag! Öffne Togetherly und feiert ihn zusammen.',
+        'Heute ist dein besonderer Tag! Öffne TogetherForever und feiert ihn zusammen.',
   },
   'anniversaryTomorrowTitle': {
     'ru': '🌹 Завтра годовщина!',
@@ -339,14 +339,14 @@ const Map<String, Map<String, String>> profileStrings = {
     'de': '🎈 Morgen ist Geburtstag!',
   },
   'birthdayTomorrowBody': {
-    'ru': 'Завтра ваш день рождения. Откройте Togetherly заранее!',
-    'en': 'Your birthday is tomorrow. Open Togetherly to get ready!',
-    'pt': 'Amanhã você faz aniversário. Abra o Togetherly e prepare tudo!',
-    'it': 'Domani compi gli anni. Apri Togetherly e prepara tutto!',
-    'es': 'Mañana cumples años. ¡Abre Togetherly y prepáralo todo!',
+    'ru': 'Завтра ваш день рождения. Откройте TogetherForever заранее!',
+    'en': 'Your birthday is tomorrow. Open TogetherForever to get ready!',
+    'pt': 'Amanhã você faz aniversário. Abra o TogetherForever e prepare tudo!',
+    'it': 'Domani compi gli anni. Apri TogetherForever e prepara tutto!',
+    'es': 'Mañana cumples años. ¡Abre TogetherForever y prepáralo todo!',
     'fr':
-        'C’est ton anniversaire demain. Ouvre Togetherly pour tout préparer !',
-    'de': 'Morgen hast du Geburtstag. Öffne Togetherly und bereite alles vor!',
+        'C’est ton anniversaire demain. Ouvre TogetherForever pour tout préparer !',
+    'de': 'Morgen hast du Geburtstag. Öffne TogetherForever und bereite alles vor!',
   },
   'celebrationBannerAnniversary': {
     'ru': 'С годовщиной! 🎉',
@@ -512,19 +512,19 @@ const Map<String, Map<String, String>> profileStrings = {
   },
   'supportIntro': {
     'ru':
-        'Togetherly — бесплатное приложение с открытым кодом. Любой донат помогает развивать проект.',
+        'TogetherForever — бесплатное приложение с открытым кодом. Любой донат помогает развивать проект.',
     'en':
-        'Togetherly is a free, open-source app. Any donation helps the project grow.',
+        'TogetherForever is a free, open-source app. Any donation helps the project grow.',
     'pt':
-        'O Togetherly é gratuito e de código aberto. Cada doação ajuda o projeto.',
+        'O TogetherForever é gratuito e de código aberto. Cada doação ajuda o projeto.',
     'it':
-        'Togetherly è gratuita e open source. Ogni donazione aiuta il progetto.',
+        'TogetherForever è gratuita e open source. Ogni donazione aiuta il progetto.',
     'es':
-        'Togetherly es gratuita y de código abierto. Cada donación ayuda al proyecto.',
+        'TogetherForever es gratuita y de código abierto. Cada donación ayuda al proyecto.',
     'fr':
-        'Togetherly est gratuite et open source. Chaque don aide le projet à avancer.',
+        'TogetherForever est gratuite et open source. Chaque don aide le projet à avancer.',
     'de':
-        'Togetherly ist kostenlos und quelloffen. Jede Spende hilft dem Projekt weiter.',
+        'TogetherForever ist kostenlos und quelloffen. Jede Spende hilft dem Projekt weiter.',
   },
   'logout': {
     'ru': 'Выйти из аккаунта',

@@ -1,3 +1,4 @@
+import '../config/brand.dart';
 import 'dart:io';
 import '../widgets/storage_image.dart';
 import 'package:flutter/gestures.dart';
@@ -54,9 +55,8 @@ class _SetupScreenState extends State<SetupScreen>
   bool _agreeToTerms = false;
 
   // Ссылки на юридические документы (раздаются с нашего сервера, pb_public).
-  static final Uri _termsUri = Uri.parse('https://togetherly.day/terms');
-  static final Uri _privacyUri =
-      Uri.parse('https://togetherly.day/privacy-policy');
+  static final Uri _termsUri = Uri.parse(Brand.termsUrl);
+  static final Uri _privacyUri = Uri.parse(Brand.privacyPolicyUrl);
   final _termsRecognizer = TapGestureRecognizer();
   final _privacyRecognizer = TapGestureRecognizer();
 

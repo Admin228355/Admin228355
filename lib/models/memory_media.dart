@@ -219,5 +219,5 @@ String galleryFileName(DateTime takenAt, MediaFile f) {
   final d = takenAt;
   final stamp = '${d.year}${_two(d.month)}${_two(d.day)}_'
       '${_two(d.hour)}${_two(d.minute)}${_two(d.second)}';
-  return 'Togetherly_${stamp}_${_two(f.index + 1)}.${f.ext}';
+  return 'TogetherForever_${stamp}_${_two(f.index + 1)}.${f.ext}';
 }

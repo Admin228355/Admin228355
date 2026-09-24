@@ -162,7 +162,7 @@ class PushBackgroundService {
         await FlutterForegroundTask.startService(
           serviceId: 4711,
           serviceTypes: const [ForegroundServiceTypes.dataSync],
-          notificationTitle: 'Togetherly на связи',
+          notificationTitle: 'TogetherForever на связи',
           notificationText: 'Получаем уведомления от партнёра',
           // Иконка-сердечко (та же, что у локальных уведомлений) — без неё
           // сервис ставит дефолт/чёрный квадрат в шторке.

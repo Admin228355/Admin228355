@@ -2623,7 +2623,7 @@ class _RuStrings extends DictStrings {
   String membersCount(int count) => 'УЧАСТНИКИ · $count';
   @override
   String shareInviteText(String code, String link) =>
-      'Присоединяйся ко мне в Togetherly! Используй код: $code\n\nИли нажми: $link';
+      'Присоединяйся ко мне в TogetherForever! Используй код: $code\n\nИли нажми: $link';
 
   @override
   String onboardingLeft(int left) => left == 1
@@ -2658,7 +2658,7 @@ class _RuStrings extends DictStrings {
   String membersOfMax(int current, int max) => '$current/$max участников';
   @override
   String shareGroupInviteText(String code, String link) =>
-      'Присоединяйся к нашей группе в Togetherly! Используй код: $code\n\nИли нажми: $link';
+      'Присоединяйся к нашей группе в TogetherForever! Используй код: $code\n\nИли нажми: $link';
   @override
   String connectedWithCouple(String name) => 'Вы с $name теперь вместе!';
   @override
@@ -2672,7 +2672,7 @@ class _RuStrings extends DictStrings {
       'Вы с $name теперь $label!';
   @override
   String joinMeLinkText(String link) =>
-      'Присоединяйся ко мне в Togetherly! $link';
+      'Присоединяйся ко мне в TogetherForever! $link';
   @override
   String membersCountBracket(int count) => 'УЧАСТНИКИ ($count)';
 
@@ -3141,7 +3141,7 @@ class _RuStrings extends DictStrings {
   String statsMoodMarks(int n) => 'Отметок за 30 дней: $n';
   @override
   String memoryFileTooBigPlusHint(int limitMb) =>
-      'Файл тяжелее $limitMb МБ. С Togetherly+ потолок вдвое выше';
+      'Файл тяжелее $limitMb МБ. С TogetherForever+ потолок вдвое выше';
   @override
   String selectedCount(int n) => 'Выбрано $n';
   @override
@@ -3522,7 +3522,7 @@ class _EnStrings extends DictStrings {
   String membersCount(int count) => 'MEMBERS · $count';
   @override
   String shareInviteText(String code, String link) =>
-      'Join me on Togetherly! Use code: $code\n\nOr click: $link';
+      'Join me on TogetherForever! Use code: $code\n\nOr click: $link';
 
   @override
   String onboardingLeft(int left) =>
@@ -3555,7 +3555,7 @@ class _EnStrings extends DictStrings {
   String membersOfMax(int current, int max) => '$current/$max members';
   @override
   String shareGroupInviteText(String code, String link) =>
-      'Join our group on Togetherly! Use code: $code\n\nOr click: $link';
+      'Join our group on TogetherForever! Use code: $code\n\nOr click: $link';
   @override
   String connectedWithCouple(String name) => "You're connected with $name!";
   @override
@@ -3568,7 +3568,7 @@ class _EnStrings extends DictStrings {
   String customRelWith(String label, String name) =>
       "You're now $label with $name!";
   @override
-  String joinMeLinkText(String link) => 'Join me on Togetherly! $link';
+  String joinMeLinkText(String link) => 'Join me on TogetherForever! $link';
   @override
   String membersCountBracket(int count) => 'MEMBERS ($count)';
 
@@ -3980,7 +3980,7 @@ class _EnStrings extends DictStrings {
   String statsMoodMarks(int n) => 'Marks in 30 days: $n';
   @override
   String memoryFileTooBigPlusHint(int limitMb) =>
-      'The file is over $limitMb MB. Togetherly+ doubles the cap';
+      'The file is over $limitMb MB. TogetherForever+ doubles the cap';
   @override
   String selectedCount(int n) => 'Selected $n';
   @override

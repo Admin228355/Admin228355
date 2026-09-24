@@ -1,3 +1,4 @@
+import '../config/brand.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'connections_manager.dart';
@@ -76,7 +77,7 @@ class PairData extends ChangeNotifier {
   /// 18–19 августа 2026 на такую ссылку зашли 30 раз с настоящих устройств —
   /// жалоба звучала как «партнёр не может перейти по пригласительной ссылке».
   String get inviteLink =>
-      inviteCode.trim().isEmpty ? '' : 'https://togetherly.day/invite/$inviteCode';
+      inviteCode.trim().isEmpty ? '' : Brand.inviteUrl(inviteCode);
 
   /// Прямой deep link без веб-хоста: партнёр сканирует QR камерой → сразу в
   /// приложение (App Links-верификация не нужна, работает офлайн от Firebase).

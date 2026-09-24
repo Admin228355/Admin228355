@@ -11,7 +11,7 @@
 const String ruWhatsNew =
     'Что нового 💜\n'
     '\n'
-    '— На главной кнопка Togetherly Wallet: запишитесь в ожидание, и в день '
+    '— На главной кнопка TogetherForever Wallet: запишитесь в ожидание, и в день '
     'выхода придёт уведомление.\n'
     '— Счётчик дней больше не отстаёт на день ночью.\n'
     '— Удаление аккаунта можно отменить в течение недели: достаточно снова '
@@ -22,7 +22,7 @@ const String ruWhatsNew =
 const String enWhatsNew =
     'What is new 💜\n'
     '\n'
-    '— A Togetherly Wallet button on the home screen: join the waitlist and '
+    '— A TogetherForever Wallet button on the home screen: join the waitlist and '
     'get a notification on launch day.\n'
     '— The days counter no longer falls a day behind at night.\n'
     '— Deleting an account can be undone for a week: just sign in again.\n'

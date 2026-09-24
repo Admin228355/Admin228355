@@ -1,15 +1,15 @@
 {
   "project_info": {
     "project_number": "000000000000",
-    "project_id": "togetherly-free-placeholder",
-    "storage_bucket": "togetherly-free-placeholder.appspot.com"
+    "project_id": "togetherforever-placeholder",
+    "storage_bucket": "togetherforever-placeholder.appspot.com"
   },
   "client": [
     {
       "client_info": {
         "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
         "android_client_info": {
-          "package_name": "com.togetherly.love.free"
+          "package_name": "com.togetherforever.app"
         }
       },
       "oauth_client": [],

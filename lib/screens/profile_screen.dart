@@ -1,3 +1,5 @@
+import '../config/free_edition.dart';
+import '../config/brand.dart';
 import 'dart:async';
 import '../utils/safe_launch.dart';
 import 'package:flutter/material.dart';
@@ -124,18 +126,16 @@ class _ProfileScreenState extends State<ProfileScreen>
   // Политика и условия живут на PocketBase-VPS (Firebase Hosting гасится вместе
   // с проектом). Раздаются из pb_public, исходники — PRIVACY_POLICY.md и
   // TERMS_OF_USE.md в репо (регенерация: tool/gen_legal_html.py).
-  static final Uri _privacyPolicyUri = Uri.parse(
-    'https://togetherly.day/privacy-policy',
-  );
-  static final Uri _termsUri = Uri.parse('https://togetherly.day/terms');
+  static final Uri _privacyPolicyUri = Uri.parse(Brand.privacyPolicyUrl);
+  static final Uri _termsUri = Uri.parse(Brand.termsUrl);
 
   /// Канал в Telegram и бот для жалоб. Обе ссылки до 16.08.2026 жили только в
   /// переписке с поддержкой: «не могу найти ссылку на тгк» — обычный вопрос,
   /// а бот знали лишь те, кому его присылали в ответ на жалобу.
   static final Uri _tgChannelUri = Uri.parse('https://t.me/sandtcompany');
-  static final Uri _bugBotUri = Uri.parse('https://t.me/TogetherlyBugsBot');
+  static final Uri _bugBotUri = Uri.parse(Brand.issuesUrl);
   // Лендинг тоже переехал с Firebase Hosting на VPS (pb_public).
-  static final Uri _aboutAppUri = Uri.parse('https://togetherly.day/#download');
+  static final Uri _aboutAppUri = Uri.parse(Brand.repoUrl);
   static final Uri _boostyUri = Uri.parse('https://boosty.to/sntcompany');
 
   /// Разовый донат картой или СБП.
@@ -484,7 +484,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   Future<void> _openSupportMail() async {
     final info = await PackageInfo.fromPlatform();
     final subject = Uri.encodeComponent(
-      'Togetherly ${info.version} (${info.buildNumber})',
+      'TogetherForever ${info.version} (${info.buildNumber})',
     );
     final uri = Uri.parse(
       'mailto:${SettingsScreen.supportEmail}?subject=$subject',
@@ -812,7 +812,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                       // (111). Гейта `kDonationsEnabled` тут мало: IPA
                       // собирается с `STORE=github`, и по флагу карточка
                       // осталась бы видимой (как и в листе монет, стр. 3925).
-                      if (!Platform.isIOS) ...[
+                      if (!kFreeEdition && !Platform.isIOS) ...[
                         const SizedBox(height: 22),
                         _buildDonationCard(context),
                       ],
@@ -2005,7 +2005,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           builder: (ctx, setSheetState) => SettingsScreen(
             accountEmail: widget.userData.email,
             scheme: _cs,
-            appVersion: 'Togetherly $version',
+            appVersion: '${Brand.appName} $version',
             onAppearance: () => _openAppearance(ctx),
             onNotifications: () => _showNotificationSettings(ctx),
             onLanguage: () => _showLanguagePicker(ctx),

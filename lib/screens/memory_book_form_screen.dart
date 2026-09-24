@@ -1,3 +1,4 @@
+import '../config/brand.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -185,7 +186,7 @@ class _MemoryBookFormScreenState extends State<MemoryBookFormScreen> {
               'Accept': 'application/json',
               // UA обязателен — без него Open Library отбивает некоторые запросы.
               'User-Agent':
-                  'Mozilla/5.0 (compatible; TogetherlyApp/1.0; +https://togetherly.app)',
+                  'Mozilla/5.0 (compatible; TogetherForever/1.0; +${Brand.repoUrl})',
             },
           )
           // Жёсткий таймаут: на мобильной сети ответ может висеть вечно,

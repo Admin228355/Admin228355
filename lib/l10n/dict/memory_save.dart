@@ -208,13 +208,13 @@ const Map<String, Map<String, String>> memorySaveStrings = {
     'de': 'Schon in der Galerie: {n}',
   },
   'saveDateNote': {
-    'ru': 'В галерее встанут на {date}, папка «Togetherly»',
-    'en': 'They’ll appear on {date} in the “Togetherly” folder',
-    'pt': 'Vão aparecer em {date}, na pasta “Togetherly”',
-    'it': 'Compariranno il {date}, nella cartella «Togetherly»',
-    'es': 'Aparecerán el {date}, en la carpeta «Togetherly»',
-    'fr': 'Ils apparaîtront au {date}, dossier « Togetherly »',
-    'de': 'Sie erscheinen am {date} im Ordner „Togetherly“',
+    'ru': 'В галерее встанут на {date}, папка «TogetherForever»',
+    'en': 'They’ll appear on {date} in the “TogetherForever” folder',
+    'pt': 'Vão aparecer em {date}, na pasta “TogetherForever”',
+    'it': 'Compariranno il {date}, nella cartella «TogetherForever»',
+    'es': 'Aparecerán el {date}, en la carpeta «TogetherForever»',
+    'fr': 'Ils apparaîtront au {date}, dossier « TogetherForever »',
+    'de': 'Sie erscheinen am {date} im Ordner „TogetherForever“',
   },
 
   // ── выбор кадров ──

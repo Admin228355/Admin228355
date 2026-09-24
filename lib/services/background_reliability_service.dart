@@ -87,11 +87,11 @@ class BackgroundReliabilityService {
           : 'Instant notifications & widgets',
       message: ru
           ? 'Чтобы сообщения, «я скучаю» и виджеты обновлялись сразу — даже '
-              'когда приложение закрыто — разрешите Togetherly работать в '
+              'когда приложение закрыто — разрешите TogetherForever работать в '
               'фоне без ограничений батареи.\n\nБез этого Android усыпляет '
               'связь, и всё приходит только при открытии приложения.'
           : 'To get messages, “miss you” and widget updates instantly — even '
-              'when the app is closed — allow Togetherly to run in the '
+              'when the app is closed — allow TogetherForever to run in the '
               'background without battery limits.\n\nOtherwise Android '
               'suspends the connection and everything only arrives when you '
               'open the app.',

@@ -86,7 +86,7 @@ class NoteExportService {
           return const NoteExportOutcome(NoteExportResult.noAccess);
         }
       }
-      await Gal.putVideo(temp.path, album: 'Togetherly');
+      await Gal.putVideo(temp.path, album: 'TogetherForever');
       return const NoteExportOutcome(NoteExportResult.saved);
     } on GalException catch (e, st) {
       debugPrint('NoteExport gal: ${e.type}');

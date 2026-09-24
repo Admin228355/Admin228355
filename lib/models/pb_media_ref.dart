@@ -8,11 +8,14 @@
 /// путём и получает свежий токен.
 library;
 
+import '../config/brand.dart';
+
 /// Домены, чьи файловые адреса наши.
 ///
 /// `duckdns` — легаси: такие ссылки разосланы людьми и лежат в старых записях,
 /// понимать их обязаны, даже когда сами больше не выдаём.
-const List<String> kPbFileHosts = [
+final List<String> kPbFileHosts = [
+  if (Brand.serverHost.isNotEmpty) Brand.serverHost,
   'togetherly.day',
   'togetherly.duckdns.org',
 ];

@@ -1,3 +1,4 @@
+import '../config/brand.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../services/locale_service.dart';
@@ -250,7 +251,7 @@ class Connection {
   /// 18–19 августа 2026 на такую ссылку зашли 30 раз с настоящих устройств —
   /// жалоба звучала как «партнёр не может перейти по пригласительной ссылке».
   String get inviteLink =>
-      inviteCode.trim().isEmpty ? '' : 'https://togetherly.day/invite/$inviteCode';
+      inviteCode.trim().isEmpty ? '' : Brand.inviteUrl(inviteCode);
 
   /// Прямой deep link без веб-хоста (для QR).
   /// Прямой deep link без веб-хоста (для QR). Пустой код — пустая строка.

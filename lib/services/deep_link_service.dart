@@ -1,3 +1,4 @@
+import '../config/brand.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:app_links/app_links.dart';
@@ -127,7 +128,9 @@ class DeepLinkService {
       final isFirebaseHost = uri.host == 'togetherly-d4856.web.app';
       // togetherly.duckdns.org — живой PocketBase-VPS (обслуживает инвайт-лендинг
       // после гашения Firebase Hosting). togetherly.app — будущий домен.
-      final isMainHost = uri.host == 'togetherly.app' ||
+      final isMainHost = (Brand.serverHost.isNotEmpty &&
+              uri.host == Brand.serverHost) ||
+          uri.host == 'togetherly.app' ||
           uri.host == 'togetherly.duckdns.org' ||
           uri.host == 'togetherly.day';
       final isInvitePath = uri.pathSegments.isNotEmpty &&

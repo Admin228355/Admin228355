@@ -1,3 +1,4 @@
+import '../../config/brand.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -35,7 +36,7 @@ class MapTiles {
   static final Map<String, vtr.Theme> _themes = {};
 
   static const Map<String, String> headers = {
-    'User-Agent': 'Togetherly (com.togetherly.love; https://togetherly.day)',
+    'User-Agent': 'TogetherForever (com.togetherforever.app; ${Brand.repoUrl})',
   };
 
   /// Адрес тайлов, который можно отдать слою прямо сейчас.

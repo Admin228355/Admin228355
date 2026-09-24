@@ -197,7 +197,7 @@ class HomeActionButtons extends StatelessWidget {
             const SizedBox(width: _gap5),
             Semantics(
               button: true,
-              label: 'Togetherly Wallet',
+              label: 'TogetherForever Wallet',
               child: _pillButton(
                 index: 2,
                 svgIcon: _walletSvg,

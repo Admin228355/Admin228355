@@ -4429,7 +4429,7 @@ class _WidgetScreenState extends State<WidgetScreen>
                             size: 13, color: _cs.onSecondaryContainer),
                         const SizedBox(width: 4),
                         Text(
-                          'Togetherly+',
+                          'TogetherForever+',
                           style: AppFonts.onest(
                             size: 11,
                             weight: 700,

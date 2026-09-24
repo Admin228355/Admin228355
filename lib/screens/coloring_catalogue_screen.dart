@@ -271,7 +271,7 @@ class _ColoringCatalogueScreenState extends State<ColoringCatalogueScreen> {
             if (locked) ...[
               const SizedBox(height: 4),
               Text(
-                _tr('в Togetherly+', 'in Togetherly+'),
+                _tr('в TogetherForever+', 'in TogetherForever+'),
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: 'Onest',

@@ -11,6 +11,7 @@
 /// ни одной версии свежее 1.17.0, хотя в проде уже 1.18.1. Приём по HTTPS
 /// проксирует Caddy (блок `bugsink.togetherly.day` → 127.0.0.1:8000).
 class SentryConfig {
-  static const String dsn =
-      'https://05953bce75c54cdb9fe149861d159da5@bugsink.togetherly.day/1';
+  /// Свой Sentry/Bugsink: `--dart-define=SENTRY_DSN=...`. Пусто — отчёты об
+  /// ошибках никуда не уходят.
+  static const String dsn = String.fromEnvironment('SENTRY_DSN');
 }

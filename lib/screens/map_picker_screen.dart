@@ -232,7 +232,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
         'addressdetails': '1',
       });
       final resp = await http.get(uri, headers: {
-        'User-Agent': 'Togetherly/1.0 (love app)',
+        'User-Agent': 'TogetherForever/1.0 (love app)',
         'Accept-Language': 'ru,en',
       }).timeout(const Duration(seconds: 8));
       if (resp.statusCode != 200) return [];

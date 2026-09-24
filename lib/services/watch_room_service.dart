@@ -1,3 +1,4 @@
+import '../config/brand.dart';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
@@ -68,7 +69,7 @@ class WatchRoomService {
   }
 
   /// Домен страницы комнаты — единственный, которому отдаём сессию.
-  static const String siteHost = 'togetherly.day';
+  static String get siteHost => Brand.serverHost;
 
   /// Код комнаты пары. Пустая строка означает отказ сервера — вызывающий
   /// показывает ошибку и не открывает просмотр.

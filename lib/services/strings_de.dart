@@ -364,15 +364,15 @@ class _DeStrings extends _EnStrings {
 
   @override
   String shareInviteText(String code, String link) =>
-      'Komm zu mir auf Togetherly! Code: $code\n\nOder hier klicken: $link';
+      'Komm zu mir auf TogetherForever! Code: $code\n\nOder hier klicken: $link';
 
   @override
   String shareGroupInviteText(String code, String link) =>
-      'Komm in unsere Gruppe auf Togetherly! Code: $code\n\n'
+      'Komm in unsere Gruppe auf TogetherForever! Code: $code\n\n'
       'Oder hier klicken: $link';
 
   @override
-  String joinMeLinkText(String link) => 'Komm zu mir auf Togetherly! $link';
+  String joinMeLinkText(String link) => 'Komm zu mir auf TogetherForever! $link';
 
   @override
   String connectedWithCouple(String name) => 'Du bist mit $name verbunden!';
@@ -477,7 +477,7 @@ class _DeStrings extends _EnStrings {
 
   @override
   String memoryFileTooBigPlusHint(int limitMb) =>
-      'Die Datei ist größer als $limitMb MB. Togetherly+ verdoppelt das Limit';
+      'Die Datei ist größer als $limitMb MB. TogetherForever+ verdoppelt das Limit';
 
   @override
   String selectedCount(int n) => '$n ausgewählt';
