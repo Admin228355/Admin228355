@@ -1,0 +1,334 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show Color;
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../models/level.dart';
+import '../models/mascot.dart';
+import '../models/mascot_anim.dart';
+import '../models/mood_entry.dart';
+import '../models/mood_pack.dart';
+import 'pb_data_service.dart';
+import 'pocketbase_service.dart';
+
+/// Удалённый КАТАЛОГ контента (паки настроений + маскоты-награды за уровень).
+///
+/// Позволяет добавлять новые паки/эмоции/маскотов БЕЗ релиза приложения: список
+/// лежит в PocketBase-коллекции `catalog_items` (публичное чтение), картинки —
+/// публичные file-URL PB. При старте:
+///   1. мгновенно поднимаем последний КЭШ с диска (офлайн-safe),
+///   2. фоном тянем свежий каталог из PocketBase, кэшируем, обновляем UI.
+///
+/// Встроенные паки (classic/pink) всегда доступны как офлайн-дефолт; каталог
+/// лишь ДОБАВЛЯЕТ к ним. Элементы с `min_app` выше текущей версии пропускаются
+/// (старые сборки не видят то, что не умеют рендерить).
+class CatalogService extends ChangeNotifier {
+  CatalogService._();
+  static final CatalogService _instance = CatalogService._();
+  static CatalogService get instance => _instance;
+
+  static const String _cacheKey = 'content_catalog_cache_v1';
+
+  List<MoodPack> _remotePacks = const [];
+  List<Mascot> _mascots = const [];
+  Set<String> _pairOwned = const {};
+  Map<String, MascotAnim> _anims = const {};
+  bool _initialized = false;
+
+  /// Встроенные и каталожные паки одним рядом, в порядке поля `sort`.
+  ///
+  /// Раньше каталожные просто дописывались в хвост, и пак с сервера не мог
+  /// встать между классическими и розовыми — только четвёртым. Сортировка идёт
+  /// по паре (sort, исходный номер): `List.sort` в Dart не обещает
+  /// устойчивости, а паки с одинаковым sort не должны меняться местами от
+  /// запуска к запуску.
+  List<MoodPack> get allPacks =>
+      orderedPacks([...MoodPack.all, ..._remotePacks]);
+
+  /// Маскоты из удалённого каталога (рендер-онли, поверх галереи группы).
+  List<Mascot> get mascots => _mascots;
+
+  /// Что куплено ПАРОЙ — ключи `owned_features` группы.
+  ///
+  /// Живут здесь, а не только параметром виджета: выбор настроения открывается
+  /// с четырёх экранов, и там, где ключи забывали передать, купленный
+  /// партнёром пак выглядел закрытым, а на iPhone исчезал совсем (платного за
+  /// деньги там не показываем). Снимок обновляет тот экран, который слушает
+  /// состояние группы.
+  Set<String> get pairOwned => _pairOwned;
+
+  void updatePairOwned(Set<String> keys) {
+    if (_pairOwned.length == keys.length && _pairOwned.containsAll(keys)) return;
+    _pairOwned = Set.unmodifiable(keys);
+    notifyListeners();
+  }
+
+  /// Анимированные пиксельные маскоты каталога по id.
+  ///
+  /// Живут отдельной картой, а не полем [Mascot]: галерея, плавающий маскот и
+  /// превью работают с обычной моделью, а анимацию спрашивают по id. Нет
+  /// анимации — рисуется прежняя картинка, и старые персонажи не ломаются.
+  MascotAnim? animById(String? id) => id == null ? null : _anims[id];
+
+  /// Есть ли в каталоге хоть один анимированный маскот.
+  bool get hasAnimated => _anims.isNotEmpty;
+
+  /// Все анимированные персонажи каталога.
+  List<MascotAnim> get animated => List.unmodifiable(_anims.values);
+
+  /// Пак по id среди всех (бандл+каталог); неизвестный → классический.
+  MoodPack packById(String? id) {
+    for (final p in allPacks) {
+      if (p.id == id) return p;
+    }
+    return MoodPack.classic;
+  }
+
+  /// Поднять кэш с диска и (если возможно) обновить из PocketBase. Идемпотентно.
+  Future<void> init() async {
+    if (_initialized) return;
+    _initialized = true;
+
+    // 1) Мгновенный кэш с диска — каталог доступен сразу и офлайн.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString(_cacheKey);
+      if (cached != null) {
+        _apply(jsonDecode(cached) as List, await _appVersion());
+      }
+    } catch (_) {}
+
+    // 2) Свежий каталог из PocketBase — В ФОНЕ, не блокируем старт приложения.
+    //    Ошибки/офлайн — тихо остаёмся на кэше/бандле.
+    unawaited(refresh());
+  }
+
+  /// Подтянуть свежий каталог из PocketBase и закэшировать. Безопасно при офлайне.
+  Future<void> refresh() async {
+    try {
+      final recs = await PbDataService.instance.loadCatalogAll();
+      // RecordModel → плоская карта (как раньше строка Supabase): кастомные поля
+      // в `rec.data`, первичный id — отдельно. `data` (json-поле) уже Map.
+      final list = <Map<String, dynamic>>[
+        for (final r in recs) {...r.data, 'id': r.id},
+      ];
+      _apply(list, await _appVersion());
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_cacheKey, jsonEncode(list));
+      } catch (_) {}
+    } catch (e) {
+      debugPrint('CatalogService.refresh failed (using cache/bundled): $e');
+    }
+  }
+
+  /// Ссылка на оплату элемента каталога, который продаётся за деньги.
+  ///
+  /// Счёт заводит сервер (`/api/lava/checkout`) на почту аккаунта: покупка по
+  /// витринной ссылке lava.top уведомлений НЕ порождает, и выдавать её пришлось
+  /// бы руками. Вернул null — оплату не открываем, кнопка честно скажет об
+  /// ошибке, а не уведёт человека в никуда.
+  ///
+  /// `already == true` означает, что элемент уже куплен (например партнёром) —
+  /// платить второй раз не за что.
+  Future<({String? url, bool already})> purchaseUrl(
+    String featureKey, {
+    String currency = 'USD',
+  }) async {
+    try {
+      final res = await PocketBaseService().pb.send(
+        '/api/lava/checkout',
+        method: 'POST',
+        body: {'feature': featureKey, 'currency': currency},
+      );
+      if (res is Map && res['ok'] == true) {
+        if (res['already'] == true) return (url: null, already: true);
+        final url = res['url'];
+        if (url is String && url.isNotEmpty) return (url: url, already: false);
+      }
+    } catch (e) {
+      debugPrint('CatalogService.purchaseUrl failed: $e');
+    }
+    return (url: null, already: false);
+  }
+
+  // ── Парсинг манифеста ───────────────────────────────────────────────────────
+
+  void _apply(List rows, String appVersion) {
+    final packs = <MoodPack>[];
+    final remoteMoods = <MoodOption>[];
+    final mascots = <Mascot>[];
+    final anims = <String, MascotAnim>{};
+
+    for (final raw in rows) {
+      if (raw is! Map) continue;
+      final row = raw.cast<String, dynamic>();
+      if (!_appAtLeast(appVersion, row['min_app'] as String?)) continue;
+
+      if (row['kind'] == 'mascot') {
+        final mascot = _parseMascot(row);
+        if (mascot != null) mascots.add(mascot);
+        continue;
+      }
+      // Анимированный: в галерее это обычный маскот, а кадры берутся из
+      // атласа по манифесту.
+      if (row['kind'] == 'mascot_anim') {
+        final data = (row['data'] as Map?)?.cast<String, dynamic>() ?? const {};
+        final unlock = _parseUnlock(row, data);
+        final anim = MascotAnim.fromCatalog(row, unlock: unlock);
+        if (anim != null) {
+          anims[anim.id] = anim;
+          mascots.add(Mascot.fromCatalog(
+            id: anim.id,
+            nameRu: anim.nameRu,
+            nameEn: anim.nameEn,
+            url: anim.sheetUrl,
+            unlock: unlock,
+          ));
+        }
+        continue;
+      }
+      if (row['kind'] != 'mood_pack') continue;
+
+      final data = (row['data'] as Map?)?.cast<String, dynamic>() ?? const {};
+      final moods = <MoodOption>[];
+      for (final m in (data['moods'] as List? ?? const [])) {
+        if (m is! Map) continue;
+        final mo = _parseMood(m.cast<String, dynamic>());
+        if (mo != null) {
+          moods.add(mo);
+          remoteMoods.add(mo);
+        }
+      }
+      if (moods.isEmpty) continue;
+
+      packs.add(MoodPack(
+        id: row['id'] as String? ?? '',
+        isFree: row['is_free'] as bool? ?? true,
+        nameRu: row['name_ru'] as String? ?? '',
+        nameEn: row['name_en'] as String? ?? '',
+        moods: moods,
+        tileGradient: _parseGradient(data['tileGradient']),
+        unlock: _parseUnlock(row, data),
+        author: (data['author'] as String? ?? '').trim(),
+        sort: (row['sort'] as num?)?.toInt() ?? 500,
+      ));
+    }
+
+    _remotePacks = List.unmodifiable(packs);
+    _mascots = List.unmodifiable(mascots);
+    _anims = Map.unmodifiable(anims);
+    MoodOption.registerRemoteMoods(remoteMoods);
+    notifyListeners();
+  }
+
+  /// Маскот из строки каталога (kind='mascot', data={url}).
+  Mascot? _parseMascot(Map<String, dynamic> row) {
+    final id = row['id'] as String?;
+    final data = (row['data'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final url = data['url'] as String?;
+    if (id == null || id.isEmpty || url == null || url.isEmpty) return null;
+    return Mascot.fromCatalog(
+      id: id,
+      nameRu: row['name_ru'] as String? ?? id,
+      nameEn: row['name_en'] as String? ?? id,
+      url: url,
+      unlock: _parseUnlock(row, data),
+    );
+  }
+
+  /// Требование разблокировки: поле `unlock` в data, иначе по `is_free`.
+  ///
+  /// Цена лежит там же, в каталоге, и в коде её нет вовсе: новый платный
+  /// персонаж появляется у людей записью в `catalog_items`, без новой сборки.
+  /// Цена из `price` в самой записи имеет старшинство над манифестом — так её
+  /// правят одним запросом, не перезаливая атлас.
+  Unlock _parseUnlock(Map<String, dynamic> row, Map<String, dynamic> data) {
+    final rowPrice = (row['price'] as num?)?.toInt() ?? 0;
+    final u = data['unlock'];
+    if (u is Map) {
+      final parsed = u.cast<String, dynamic>();
+      if (rowPrice > 0) parsed['price'] = rowPrice;
+      return Unlock.fromJson(parsed);
+    }
+    final free = row['is_free'] as bool? ?? true;
+    if (free) return const Unlock.free();
+    return Unlock.premium(
+      price: rowPrice,
+      plusIncluded: row['plus_included'] as bool? ?? false,
+    );
+  }
+
+  /// Одно настроение из манифеста. Для известных id цвет/метку берём из сборки,
+  /// для НОВЫХ — из манифеста (нужны color/labelRu/labelEn/score).
+  MoodOption? _parseMood(Map<String, dynamic> m) {
+    final id = m['id'] as String?;
+    final url = m['url'] as String?;
+    if (id == null || id.isEmpty || url == null || url.isEmpty) return null;
+
+    final known = MoodOption.byId(id); // встроенный канон, если есть
+    return MoodOption(
+      id: id,
+      imagePath: url,
+      label: m['labelRu'] as String? ?? known?.label ?? id,
+      labelEn: m['labelEn'] as String?,
+      color: _parseColor(m['color']) ?? known?.color ?? const Color(0xFF9CA3AF),
+      scoreOverride: (m['score'] as num?)?.toInt(),
+    );
+  }
+
+  List<Color>? _parseGradient(dynamic v) {
+    if (v is! List) return null;
+    final colors = <Color>[];
+    for (final c in v) {
+      final parsed = _parseColor(c);
+      if (parsed != null) colors.add(parsed);
+    }
+    return colors.length >= 2 ? colors : null;
+  }
+
+  /// '#RRGGBB' или '#AARRGGBB' → Color.
+  Color? _parseColor(dynamic v) {
+    if (v is! String) return null;
+    var hex = v.replaceAll('#', '').trim();
+    if (hex.length == 6) hex = 'FF$hex';
+    if (hex.length != 8) return null;
+    final value = int.tryParse(hex, radix: 16);
+    return value == null ? null : Color(value);
+  }
+
+  // ── Версия приложения / semver-гейт ─────────────────────────────────────────
+
+  String? _cachedVersion;
+  Future<String> _appVersion() async {
+    if (_cachedVersion != null) return _cachedVersion!;
+    try {
+      _cachedVersion = (await PackageInfo.fromPlatform()).version;
+    } catch (_) {
+      _cachedVersion = '0.0.0';
+    }
+    return _cachedVersion!;
+  }
+
+  /// true, если текущая версия приложения ≥ [minApp] (null/мусор → допускаем).
+  bool _appAtLeast(String current, String? minApp) {
+    if (minApp == null || minApp.isEmpty) return true;
+    final cur = _semver(current);
+    final min = _semver(minApp);
+    for (var i = 0; i < 3; i++) {
+      if (cur[i] != min[i]) return cur[i] > min[i];
+    }
+    return true;
+  }
+
+  List<int> _semver(String v) {
+    final parts = v.split('+').first.split('.');
+    return [
+      for (var i = 0; i < 3; i++)
+        (i < parts.length ? int.tryParse(parts[i]) : 0) ?? 0,
+    ];
+  }
+}
