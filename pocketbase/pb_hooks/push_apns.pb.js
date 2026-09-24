@@ -41,7 +41,7 @@ routerAdd("POST", "/api/apns/test", (e) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         token: token,
-        title: String(body.title || "Togetherly"),
+        title: String(body.title || "TogetherForever"),
         body: String(body.body || "Проверка доставки"),
         thread: "test",
         sandbox: !!body.sandbox,
@@ -70,7 +70,7 @@ routerAdd("POST", "/api/fcm/test", (e) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         token: token,
-        title: String(body.title || "Togetherly"),
+        title: String(body.title || "TogetherForever"),
         body: String(body.body || "Проверка доставки"),
         tag: "test",
         data: { kind: "test" },

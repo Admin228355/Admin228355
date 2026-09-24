@@ -33,7 +33,7 @@ onRecordUpdateRequest((e) => {
       "last_daily_bonus_at", "last_memory_reward_at",
       "partner_invite_reward_granted", "partner_invite_rewarded_keys",
       "mood_streak_rewards",
-      // Togetherly+ ведут только серверные пути: вебхук lava.top, погашение
+      // TogetherForever+ ведут только серверные пути: вебхук lava.top, погашение
       // кода и роут /api/coins/iap-purchase (он же сверяет чек с Google). До
       // 28 июля флага тут не было, и `PATCH /api/collections/users/records/:id`
       // с `{"plus": true}` открывал платное даром — правило коллекции пускает
@@ -160,7 +160,7 @@ onRecordCreateRequest((e) => {
       "last_daily_bonus_at", "last_memory_reward_at",
       "partner_invite_reward_granted", "partner_invite_rewarded_keys",
       "mood_streak_rewards",
-      // Togetherly+ ведут только серверные пути: вебхук lava.top, погашение
+      // TogetherForever+ ведут только серверные пути: вебхук lava.top, погашение
       // кода и роут /api/coins/iap-purchase (он же сверяет чек с Google). До
       // 28 июля флага тут не было, и `PATCH /api/collections/users/records/:id`
       // с `{"plus": true}` открывал платное даром — правило коллекции пускает

@@ -1,9 +1,9 @@
-/// Список ожидания Togetherly Wallet и флаг его выхода.
+/// Список ожидания TogetherForever Wallet и флаг его выхода.
 ///
 /// Кнопка с купюрами на главной ведёт сюда, пока Wallet не вышел: стена
 /// показывает, сколько людей ждут, и записывает в очередь. В день выхода
 /// флаг в `app_config.wallet` переключается скриптом `wallet_release.py`, и та
-/// же кнопка открывает Wallet без обновления Togetherly.
+/// же кнопка открывает Wallet без обновления TogetherForever.
 ///
 ///   GET  /api/wallet/waitlist  → { count, joined, place, wallet }
 ///   POST /api/wallet/waitlist  → то же, человек уже в списке

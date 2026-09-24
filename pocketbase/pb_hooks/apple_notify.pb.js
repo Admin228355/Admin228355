@@ -93,7 +93,7 @@ routerAdd("POST", "/api/apple/notifications", (e) => {
           owner.set("last_plus_grant_ms", Date.now());
           $app.save(owner);
           outcome = "granted";
-          $app.logger().warn("apple/notify: Togetherly+ выдан по уведомлению",
+          $app.logger().warn("apple/notify: TogetherForever+ выдан по уведомлению",
             "uid", owner.id, "tx", txId);
         } catch (err) {
           $app.logger().error("apple/notify: выдача не удалась",

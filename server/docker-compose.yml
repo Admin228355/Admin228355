@@ -1,0 +1,87 @@
+# TogetherForever — весь сервер одной командой: docker compose up -d
+#
+# PocketBase, hotpath, Centrifugo и Caddy живут в ОДНОМ сетевом пространстве
+# (network_mode: service:pocketbase), как у автора на одном сервере: хуки
+# PocketBase зовут hotpath по 127.0.0.1:8120, hotpath ходит в PocketBase и
+# Centrifugo тоже по 127.0.0.1. Наружу открыты только 80 и 443 (Caddy).
+name: togetherforever
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: togetherforever
+      POSTGRES_USER: togetherforever
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U togetherforever -d togetherforever"]
+      interval: 5s
+      retries: 20
+
+  pocketbase:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile.pocketbase
+      args:
+        REPO_URL: ${REPO_URL:-https://github.com/Admin228355/Admin228355}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+      - "127.0.0.1:8090:8090"
+    environment:
+      CENTRIFUGO_API: http://127.0.0.1:8000/api
+      CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY}
+      CENTRIFUGO_TOKEN_HMAC: ${CENTRIFUGO_TOKEN_HMAC}
+      TURN_HOST: ${TURN_HOST:-}
+      TURN_USER: ${TURN_USER:-}
+      TURN_PASS: ${TURN_PASS:-}
+      TZ: ${TZ:-Europe/Moscow}
+    volumes:
+      - ./data/pb_data:/pb/pb_data
+
+  hotpath:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile.hotpath
+    restart: unless-stopped
+    network_mode: service:pocketbase
+    depends_on:
+      postgres:
+        condition: service_healthy
+      pocketbase:
+        condition: service_started
+    env_file: .env
+    environment:
+      HOTPATH_PG_DSN: postgresql://togetherforever:${POSTGRES_PASSWORD}@postgres:5432/togetherforever
+      PB_DB: /pb/pb_data/data.db
+      PB_URL: http://127.0.0.1:8090
+      CENTRIFUGO_API: http://127.0.0.1:8000/api
+      HOTPATH_GROUPS: pg
+      POISKKINO_KEY: ${POISKKINO_KEY:-}
+      HOTPATH_WORKERS: ${HOTPATH_WORKERS:-2}
+    volumes:
+      - ./data/pb_data:/pb/pb_data
+
+  centrifugo:
+    image: centrifugo/centrifugo:v6
+    restart: unless-stopped
+    network_mode: service:pocketbase
+    command: centrifugo -c /centrifugo/config.json
+    volumes:
+      - ./data/centrifugo.json:/centrifugo/config.json:ro
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    network_mode: service:pocketbase
+    environment:
+      SITE_ADDRESS: ${DOMAIN}
+      APP_HOST: 127.0.0.1
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy:/data

@@ -38,8 +38,8 @@
   // просто существует в комнате» (21.08.2026: четыре живые комнаты, где
   // приложение в канале есть, а страница так и не подписалась).
   const WS = [
-    { transport: 'websocket', endpoint: 'wss://togetherly.day/connection/websocket' },
-    { transport: 'websocket', endpoint: 'wss://rt.togetherly.day:8443/connection/websocket' },
+    // TogetherForever: realtime на том же домене, что и страница.
+    { transport: 'websocket', endpoint: 'wss://' + location.host + '/connection/websocket' },
   ];
 
   /// Сколько ждём подключения, прежде чем свалиться на запасной адрес.
@@ -131,7 +131,7 @@
     return Math.max(1, people.size);
   }
 
-  /** Сессия Togetherly, с которой страница просит пропуск.
+  /** Сессия TogetherForever, с которой страница просит пропуск.
    *
    *  Новые сборки приложения кладут её сами (`window.__togetherlyAuth`, скрипт
    *  в начале документа). В браузере она лежит там же, куда её кладёт SDK

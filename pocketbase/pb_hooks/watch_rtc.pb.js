@@ -18,15 +18,17 @@ routerAdd("GET", "/api/watch/rtc", (e) => {
   const pass = $os.getenv("TURN_PASS");
   // Запасное имя — именно `rt.`: TURN живёт на первой машине, а `togetherly.day`
   // с 17.08.2026 смотрит на вторую, где его нет.
-  const host = $os.getenv("TURN_HOST") || "rt.togetherly.day";
+  // TogetherForever: свой TURN задаётся TURN_HOST; без него — только STUN.
+  const host = $os.getenv("TURN_HOST") || "";
 
   // Публичные STUN оставляем даже без своего TURN: большинству пар хватает
   // прямого соединения, и ретранслятор им не нужен вовсе.
   const servers = [
-    { urls: ["stun:stun.l.google.com:19302", "stun:" + host + ":3478"] },
+    { urls: host ? ["stun:stun.l.google.com:19302", "stun:" + host + ":3478"]
+                 : ["stun:stun.l.google.com:19302"] },
   ];
 
-  if (user && pass) {
+  if (host && user && pass) {
     servers.push({
       urls: [
         "turn:" + host + ":3478?transport=udp",

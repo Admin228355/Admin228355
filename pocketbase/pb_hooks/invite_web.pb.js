@@ -31,12 +31,12 @@ routerAdd("GET", "/invite/", (e) => {
   const PLAY_URL =
     "https://play.google.com/store/apps/details?id=com.togetherly.love";
   const RUSTORE_URL = "https://www.rustore.ru/catalog/app/com.togetherly.love";
-  const APK_URL = "https://github.com/THET1ME-1/Togetherly/releases/latest";
+  const APK_URL = "__REPO_URL__/releases/latest";
   const HTML = "text/html; charset=utf-8";
   const html = [
     '<!doctype html><html lang="ru"><head><meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width,initial-scale=1">',
-    "<title>Приглашение в Togetherly</title>",
+    "<title>Приглашение в TogetherForever</title>",
     "<style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#fff5f7;",
     "color:#33202a;display:flex;min-height:100vh;margin:0;align-items:center;justify-content:center;text-align:center}",
     ".card{max-width:340px;padding:28px}",
@@ -49,10 +49,8 @@ routerAdd("GET", "/invite/", (e) => {
     "<h2>В ссылке нет кода</h2>",
     "<p>Её отправили раньше, чем приложение успело получить код приглашения.</p>",
     "<p>Попросите партнёра открыть раздел «Связь» и прислать ссылку заново — там же виден и сам код, его можно ввести руками.</p>",
-    '<a class="btn" href="loveapp://invite">Открыть Togetherly</a>',
+    '<a class="btn" href="loveapp://invite">Открыть TogetherForever</a>',
     '<p class="hint">Приложения ещё нет? Поставьте, а код введёте после входа.</p>',
-    '<a class="store" href="' + PLAY_URL + '">Google Play</a>',
-    '<a class="store" href="' + RUSTORE_URL + '">RuStore</a>',
     '<a class="store" href="' + APK_URL + '">Скачать APK</a>',
     "</div></body></html>",
   ].join("");
@@ -65,12 +63,12 @@ routerAdd("GET", "/invite", (e) => {
   const PLAY_URL =
     "https://play.google.com/store/apps/details?id=com.togetherly.love";
   const RUSTORE_URL = "https://www.rustore.ru/catalog/app/com.togetherly.love";
-  const APK_URL = "https://github.com/THET1ME-1/Togetherly/releases/latest";
+  const APK_URL = "__REPO_URL__/releases/latest";
   const HTML = "text/html; charset=utf-8";
   const html = [
     '<!doctype html><html lang="ru"><head><meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width,initial-scale=1">',
-    "<title>Приглашение в Togetherly</title>",
+    "<title>Приглашение в TogetherForever</title>",
     "<style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#fff5f7;",
     "color:#33202a;display:flex;min-height:100vh;margin:0;align-items:center;justify-content:center;text-align:center}",
     ".card{max-width:340px;padding:28px}",
@@ -83,10 +81,8 @@ routerAdd("GET", "/invite", (e) => {
     "<h2>В ссылке нет кода</h2>",
     "<p>Её отправили раньше, чем приложение успело получить код приглашения.</p>",
     "<p>Попросите партнёра открыть раздел «Связь» и прислать ссылку заново — там же виден и сам код, его можно ввести руками.</p>",
-    '<a class="btn" href="loveapp://invite">Открыть Togetherly</a>',
+    '<a class="btn" href="loveapp://invite">Открыть TogetherForever</a>',
     '<p class="hint">Приложения ещё нет? Поставьте, а код введёте после входа.</p>',
-    '<a class="store" href="' + PLAY_URL + '">Google Play</a>',
-    '<a class="store" href="' + RUSTORE_URL + '">RuStore</a>',
     '<a class="store" href="' + APK_URL + '">Скачать APK</a>',
     "</div></body></html>",
   ].join("");
@@ -104,7 +100,7 @@ routerAdd("GET", "/invite/{code}", (e) => {
   const PLAY_URL =
     "https://play.google.com/store/apps/details?id=com.togetherly.love";
   const RUSTORE_URL = "https://www.rustore.ru/catalog/app/com.togetherly.love";
-  const APK_URL = "https://github.com/THET1ME-1/Togetherly/releases/latest";
+  const APK_URL = "__REPO_URL__/releases/latest";
   // Санитизация: только буквы/цифры, максимум 12 символов — иначе это не наш
   // код (и защита от reflected-XSS при вставке в HTML/URL).
   // Path-параметр берём из url.path (pathValue роутером этой сборки PB не
@@ -147,9 +143,9 @@ routerAdd("GET", "/invite/{code}", (e) => {
     .slice(0, 24);
   const initial = safeName ? safeName.slice(0, 1).toUpperCase() : "";
 
-  // Приглашение из Togetherly Wallet (`?app=money`). До 18.09.2026 страница
-  // его не различала: писала «зовёт вас в Togetherly», вела в магазины
-  // Togetherly, а кнопка открывала `loveapp://` — у человека с одним Wallet она
+  // Приглашение из TogetherForever Wallet (`?app=money`). До 18.09.2026 страница
+  // его не различала: писала «зовёт вас в TogetherForever», вела в магазины
+  // TogetherForever, а кнопка открывала `loveapp://` — у человека с одним Wallet она
   // не делала ничего («кнопка не работает»). У Wallet своя схема
   // `togetherlywallet://invite/CODE`; на Android ссылка идёт через intent://
   // с запасным адресом — стоит Wallet, откроется он, нет — страница загрузки.
@@ -162,8 +158,9 @@ routerAdd("GET", "/invite/{code}", (e) => {
   } catch (_) {
     app = "";
   }
-  if (app === "money") {
-    const W_APK = "https://github.com/THET1ME-1/Togetherly-Wallet/releases/latest";
+  // TogetherForever: отдельного Wallet-приложения нет.
+  if (false && app === "money") {
+    const W_APK = "https://github.com/THET1ME-1/TogetherForever-Wallet/releases/latest";
     const W_PLAY = "https://play.google.com/store/apps/details?id=com.togetherly.money";
     const wDeep = "togetherlywallet://invite/" + code;
     const wIntent =
@@ -173,7 +170,7 @@ routerAdd("GET", "/invite/{code}", (e) => {
     const wHtml = [
       '<!doctype html><html lang="ru"><head><meta charset="utf-8">',
       '<meta name="viewport" content="width=device-width,initial-scale=1">',
-      "<title>Приглашение в Togetherly Wallet</title>",
+      "<title>Приглашение в TogetherForever Wallet</title>",
       "<style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#f5f5f5;",
       "color:#111;display:flex;min-height:100vh;margin:0;align-items:center;justify-content:center;text-align:center}",
       ".card{max-width:340px;padding:28px}.code{font-size:34px;font-weight:800;letter-spacing:8px;margin:12px 0 4px}",
@@ -188,8 +185,8 @@ routerAdd("GET", "/invite/{code}", (e) => {
       "</style></head><body><div class=\"card\">",
       safeName ? '<div class="who">' + initial + "</div>" : "",
       safeName
-        ? "<h2>" + safeName + " зовёт вас в Togetherly Wallet</h2>"
-        : "<h2>Вас зовут в Togetherly Wallet</h2>",
+        ? "<h2>" + safeName + " зовёт вас в TogetherForever Wallet</h2>"
+        : "<h2>Вас зовут в TogetherForever Wallet</h2>",
       "<p>Общий бюджет на двоих: траты с общей карты видят оба, личные счета остаются вашими.</p>",
       '<p style="margin-top:18px">Код приглашения:</p><div class="code" id="c">' + code + "</div>",
       '<button class="copy" id="cp" type="button">Скопировать код</button>',
@@ -213,7 +210,7 @@ routerAdd("GET", "/invite/{code}", (e) => {
   const html = [
     '<!doctype html><html lang="ru"><head><meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width,initial-scale=1">',
-    "<title>Приглашение в Togetherly</title>",
+    "<title>Приглашение в TogetherForever</title>",
     "<style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#fff5f7;",
     "color:#33202a;display:flex;min-height:100vh;margin:0;align-items:center;justify-content:center;text-align:center}",
     ".card{max-width:340px;padding:28px}.code{font-size:34px;font-weight:800;letter-spacing:8px;color:#e5578a;margin:14px 0}",
@@ -227,15 +224,13 @@ routerAdd("GET", "/invite/{code}", (e) => {
     "</style></head><body><div class=\"card\">",
     safeName ? '<div class="who">' + initial + "</div>" : "",
     safeName
-      ? "<h2>" + safeName + " зовёт вас в Togetherly</h2>"
-      : "<h2>💞 Тебя приглашают в Togetherly</h2>",
+      ? "<h2>" + safeName + " зовёт вас в TogetherForever</h2>"
+      : "<h2>💞 Тебя приглашают в TogetherForever</h2>",
     "<p>Одно приложение на двоих: общий чат, настроение, лента воспоминаний и виджеты на экране.</p>",
     '<p style="margin-top:18px">Код приглашения:</p><div class="code">' + code + "</div>",
     "<p>Открываем приложение…</p>",
     '<a class="btn" href="' + deep + '">Открыть в приложении</a>',
     '<p class="hint">Приложения ещё нет? Поставьте — код подхватится сам.</p>',
-    '<a class="store" href="' + PLAY_URL + '">Google Play</a>',
-    '<a class="store" href="' + RUSTORE_URL + '">RuStore</a>',
     '<a class="store" href="' + APK_URL + '">Скачать APK</a>',
     "</div><script>setTimeout(function(){location.href=" + JSON.stringify(deep) + "},400);</script>",
     "</body></html>",

@@ -1,0 +1,17 @@
+{
+  "http_server": { "port": 8000 },
+  "client": {
+    "token": { "hmac_secret_key": "__CENTRIFUGO_TOKEN_HMAC__" },
+    "allowed_origins": ["https://__DOMAIN__"]
+  },
+  "http_api": { "key": "__CENTRIFUGO_API_KEY__" },
+  "channel": {
+    "namespaces": [
+      { "name": "pair",  "presence": true, "allow_publish_for_subscriber": true, "allow_presence_for_subscriber": true },
+      { "name": "user",  "presence": true, "allow_publish_for_subscriber": true, "allow_presence_for_subscriber": true },
+      { "name": "loc",   "presence": true, "allow_publish_for_subscriber": true, "allow_presence_for_subscriber": true },
+      { "name": "draw",  "presence": true, "allow_publish_for_subscriber": true, "allow_presence_for_subscriber": true },
+      { "name": "watch", "presence": true, "allow_publish_for_subscriber": true, "allow_presence_for_subscriber": true }
+    ]
+  }
+}

@@ -255,7 +255,7 @@ routerAdd("POST", "/api/coins/daily-bonus", (e) => {
   return e.json(out.s, out.b);
 }, $apis.requireAuth());
 
-// ── Ежемесячные монеты владельцам Togetherly+ ────────────────────────────────
+// ── Ежемесячные монеты владельцам TogetherForever+ ────────────────────────────────
 //
 // Разовая покупка имеет неприятное свойство: заплатил, получил, забыл.
 // Небольшое начисление раз в месяц напоминает, что покупка продолжает
@@ -650,7 +650,7 @@ routerAdd("POST", "/api/coins/iap-purchase", (e) => {
   // (`validation_forbidden_pk_character`). Пока сюда клали сам токен, любая
   // покупка Play падала на сохранении записи, роут отвечал `500 tx failed`, и
   // за всю историю в `iap_purchases` не появилось ни одной строки: 30 июля так
-  // потерялась оплата Togetherly+ на 9,99 €. Хеш даёт те же 64 безопасных
+  // потерялась оплата TogetherForever+ на 9,99 €. Хеш даёт те же 64 безопасных
   // символа и ту же идемпотентность: один токен — одна запись.
   const tokenKey = $security.sha256(purchaseToken);
 
@@ -679,7 +679,7 @@ routerAdd("POST", "/api/coins/iap-purchase", (e) => {
     : (store === "rustore" ? "rustore" : "play");
   // Чек сверяет служба на 8097: покупку Play — через Play Developer API, чек
   // App Store — у Apple на verifyReceipt (общий секрет там нужен только
-  // подпискам, а Togetherly+ — разовая покупка). Токен RuStore не признаёт
+  // подпискам, а TogetherForever+ — разовая покупка). Токен RuStore не признаёт
   // ни тот, ни другой, поэтому он идёт без сверки.
   // Номер сделки App Store. По нему уведомление о возврате находит покупку:
   // в самом уведомлении есть только он, ни нашего uid, ни почты там нет.
@@ -725,7 +725,7 @@ routerAdd("POST", "/api/coins/iap-purchase", (e) => {
   }
 
   // Элемент каталога из Google Play: пак настроений или маскот. Монет не даёт,
-  // как и Togetherly+, — кладёт ключ владения `вид:id`, тот же самый, что
+  // как и TogetherForever+, — кладёт ключ владения `вид:id`, тот же самый, что
   // выдают покупка за монеты, вебхук lava.top и погашение кода. Ключ уходит и
   // парам покупателя: набор общий, платит кто-то один.
   //
@@ -890,7 +890,7 @@ routerAdd("POST", "/api/coins/iap-purchase", (e) => {
         const push = require(`${__hooks}/apns_push.js`);
         push.sendTo(
           partnerUid,
-          "Togetherly+ — подарок 💜",
+          "TogetherForever+ — подарок 💜",
           from ? from + " подарил(а) вам полный доступ" : "Вам подарили полный доступ",
           "plusgift");
         $app.logger().warn("iap: подарок вручён", "from", e.auth.id, "to", partnerUid);
@@ -901,7 +901,7 @@ routerAdd("POST", "/api/coins/iap-purchase", (e) => {
     return e.json(giftOut.s, giftOut.b);
   }
 
-  // Togetherly+ из Google Play (товар togetherly_plus, способ покупки lifetime).
+  // TogetherForever+ из Google Play (товар togetherly_plus, способ покупки lifetime).
   // Монеты не начисляем — ставим флаг доступа, тот же, что даёт lava.top-вебхук
   // и погашение кода. Идемпотентность общая с монетами: один purchaseToken =
   // одна запись в iap_purchases, повторный вызов ничего не меняет.
@@ -935,7 +935,7 @@ routerAdd("POST", "/api/coins/iap-purchase", (e) => {
         // След успешной выдачи. Без него ответ на вопрос «Плюс доехал?»
         // приходится копать в базе, а во время сбоя счёт идёт на часы.
         try {
-          $app.logger().warn("iap: Togetherly+ выдан", "uid", e.auth.id,
+          $app.logger().warn("iap: TogetherForever+ выдан", "uid", e.auth.id,
             "store", PLATFORM, "product", productId);
         } catch (_) {}
         plusOut = { s: 200, b: { ok: true, alreadyGranted: false, plus: true, coins: user.getInt("coins") || 0 } };
@@ -945,7 +945,7 @@ routerAdd("POST", "/api/coins/iap-purchase", (e) => {
       // iPhone падал здесь молча, и разбирать было нечего — в журнале
       // остался только подарок, у которого лог был.
       try {
-        $app.logger().error("iap: Togetherly+ не выдан", "product", productId,
+        $app.logger().error("iap: TogetherForever+ не выдан", "product", productId,
           "uid", e.auth.id, "store", store, "err", String(err));
       } catch (_) {}
       return e.json(500, { ok: false, error: "tx failed" });

@@ -278,7 +278,7 @@
   .top--room { padding: 10px 12px; gap: 8px; }
   .room-code__cap, .status-line { display: none; }
   .room-code b { font-size: 15px; }
-  /* На телефоне в шапке место только под значок: слово «Togetherly» уступает
+  /* На телефоне в шапке место только под значок: слово «TogetherForever» уступает
      место коду комнаты, знак и приписка остаются. */
   #copy { width: 46px; padding: 0; }
   #copy span { display: none; }

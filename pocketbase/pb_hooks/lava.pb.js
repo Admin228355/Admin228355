@@ -21,7 +21,7 @@ routerAdd("POST", "/api/lava/webhook", (e) => {
     "64e68f3f-7281-4593-aa00-0b438522750b": 1400,
     "cd2e08ec-e826-495d-bb55-842a3e3742dc": 4000,
   };
-  // Togetherly+ — разовая покупка: платные темы, календарь цикла, каталог
+  // TogetherForever+ — разовая покупка: платные темы, календарь цикла, каталог
   // виджетов, свой рисунок в раскрасках и свои категории в «Хочу с тобой».
   // Идентификатор товара публичный (он же в ссылке на
   // покупку), поэтому лежит прямо здесь; переменной окружения можно
@@ -37,7 +37,7 @@ routerAdd("POST", "/api/lava/webhook", (e) => {
   // владения `вид:id`, что и покупка за монеты, поэтому клиент правок не
   // требует. Новый пак или маскот добавляется сюда ДВУМЯ строками — товар и
   // его оффер: в уведомлении lava.top приезжает любой из двух идентификаторов
-  // (на этом уже спотыкались с Togetherly+).
+  // (на этом уже спотыкались с TogetherForever+).
   const FEATURE_SKUS = {
     "a3752660-488e-495e-a67b-ed1e4f6ad877": "mood_pack:moti",
     "1d908a4e-9751-41f7-98e9-8499c0c835aa": "mood_pack:moti",
@@ -191,7 +191,7 @@ routerAdd("POST", "/api/lava/webhook", (e) => {
 
       const col = txApp.findCollectionByNameOrId("redeem_codes");
       const rec = new Record(col);
-      // У Togetherly+ монет нет: код открывает возможности, а не пополняет
+      // У TogetherForever+ монет нет: код открывает возможности, а не пополняет
       // баланс. Флаг едет вместе с кодом, чтобы погашение знало, что делать.
       rec.set("coins", (isPlus || feature) ? 0 : amount);
       rec.set("plus", isPlus);
@@ -210,7 +210,7 @@ routerAdd("POST", "/api/lava/webhook", (e) => {
 
         if (isPlus) {
           user.set("plus", true);
-          // Откуда покупка: на iOS витрины Togetherly+ нет вовсе, и по этому
+          // Откуда покупка: на iOS витрины TogetherForever+ нет вовсе, и по этому
           // полю потом видно, почему у человека всё открыто без неё.
           user.set("plus_platform", "lava");
           txApp.save(user);
@@ -299,7 +299,7 @@ routerAdd("POST", "/api/lava/webhook", (e) => {
           const push = require(`${__hooks}/apns_push.js`);
           push.sendTo(
             plusGrantedTo,
-            "Togetherly+ — подарок 💜",
+            "TogetherForever+ — подарок 💜",
             from ? from + " подарил(а) вам полный доступ" : "Вам подарили полный доступ",
             "plusgift");
           try { inv.set("granted", true); $app.save(inv); } catch (_) {}

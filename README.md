@@ -1,152 +1,105 @@
 <div align="center">
 
-<img src="docs/branding/readme-banner.png" alt="Togetherly — приложение для двоих · an app for two" width="100%">
+<img src="docs/branding/app-icon-512.png" alt="TogetherForever" width="120">
 
-<br>
+# TogetherForever
 
-[![Release](https://img.shields.io/github/v/release/THET1ME-1/togetherly?style=for-the-badge&label=release&color=E75480)](https://github.com/THET1ME-1/togetherly/releases/latest)
-[![Users](https://img.shields.io/endpoint?url=https%3A%2F%2Ftogetherly-badge.badzoff.workers.dev%2Fbadge&style=for-the-badge)](https://github.com/THET1ME-1/togetherly/releases/latest)
-[![License](https://img.shields.io/github/license/THET1ME-1/togetherly?style=for-the-badge&color=8E4657)](LICENSE)
-[![Stars](https://img.shields.io/github/stars/THET1ME-1/togetherly?style=for-the-badge&color=E75480)](https://github.com/THET1ME-1/togetherly/stargazers)
-[![Platform](https://img.shields.io/badge/Android_·_iOS-1F1B24?style=for-the-badge)](https://github.com/THET1ME-1/togetherly/releases/latest)
+**Уютное приватное пространство для двоих — бесплатно, без рекламы и подписок.**
 
+Общие воспоминания · настроения · чат · совместное рисование · карта «Где мы» · виджеты на рабочий стол
+
+[![License](https://img.shields.io/badge/license-GPL--3.0-E75480?style=for-the-badge)](LICENSE)
 ![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)
-![Dart](https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white)
-![PocketBase](https://img.shields.io/badge/PocketBase-B8DBD9?style=for-the-badge&logo=pocketbase&logoColor=black)
-![Centrifugo](https://img.shields.io/badge/Centrifugo-46488B?style=for-the-badge)
-![Material 3](https://img.shields.io/badge/Material_3-Expressive-E75480?style=for-the-badge)
+![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)
 
-**A cozy private space for two** — shared memories, moods, live map, home widgets, and little rituals that keep you close, even apart. 💛
-
-🇷🇺 🇬🇧 · 2 languages
-
-[**⬇ Download**](https://github.com/THET1ME-1/togetherly/releases/latest) · [English](#english) · [Русский](#-togetherly-русский)
-
-<br>
-
-<img src="docs/branding/screenshots.png" alt="Togetherly — profile, widgets, connection, calendar, drawing" width="100%">
+[**⬇ Скачать APK**](../../releases/latest) · [Свой сервер](server/README.md) · [English](#english)
 
 </div>
+
+---
+
+## Что это
+
+TogetherForever — свободный форк приложения [Togetherly](https://github.com/THET1ME-1/Togetherly)
+(GPL-3.0). В оригинале часть возможностей платная и есть реклама. Здесь всё открыто для всех,
+а данные хранятся на **своём** сервере, который ставится одной командой.
+
+### Что внутри
+- 📸 **Лента воспоминаний**: фото, видео, места, музыка, книги и фильмы
+- 💌 **Капсула времени**: письмо откроется в выбранный день
+- 🔒 **Секретные воспоминания** под PIN-кодом
+- 💬 **Чат** с голосовыми сообщениями и видео-кружочками любой формы
+- 🎨 **Совместное рисование**, раскраски вдвоём, открытки
+- 😊 **Настроения** и история настроения партнёра
+- 🗺️ **Карта «Где мы»** в реальном времени
+- 🧩 **Виджеты** на рабочий стол: фото дня, дни вместе, серия, настроение
+- 🌸 **Календарь цикла** с прогнозом
+- 🐣 **Маскот пары**, который растёт вместе с вами
+- 🎬 **Совместный просмотр** видео с голосовой связью
+- 🏆 Достижения пары, «скучаю», таймеры, желания
+
+### Чем отличается от оригинала
+| | Togetherly | **TogetherForever** |
+|---|---|---|
+| Togetherly+ (цикл, новые виджеты, свои темы, кружочки любой формы) | платно | **бесплатно** |
+| Темы, фоны холста, значки, маскоты, паки настроений за монеты | за монеты | **открыты все** |
+| Реклама (баннеры, ролики, межстраничная) | есть | **нет** |
+| Цветовые темы | 25 | **35** + своя тема из любого цвета или фото |
+| Сервер | сервер автора | **свой** (`server/`, одна команда) |
+
+## Как пользоваться
+
+1. **Сервер.** Нужен один на всех, кто будет пользоваться твоей сборкой. Инструкция:
+   [server/README.md](server/README.md) — бесплатный вариант на Oracle Cloud Always Free.
+2. **Сборка приложения.** В репозитории: *Settings → Secrets and variables → Actions → Variables*
+   → `PB_URL = https://твой-домен`. GitHub Actions сам соберёт APK и выложит его в
+   [Releases](../../releases/latest).
+3. **Установка.** На телефоне скачай `TogetherForever-…-arm64-v8a.apk` и открой.
+   Зарегистрируйся по почте, пригласи партнёра кодом или QR.
+
+> Для автообновлений подойдёт [Obtainium](https://github.com/ImranR98/Obtainium):
+> *Add App* → ссылка на этот репозиторий.
+
+### Постоянная подпись APK (по желанию)
+Без неё каждая сборка подписывается новым отладочным ключом, и обновить приложение поверх
+старого не выйдет — придётся переустанавливать. Чтобы обновлялось поверх:
+
+```bash
+keytool -genkey -v -keystore tf.jks -keyalg RSA -keysize 2048 -validity 10000 -alias tf
+base64 -w0 tf.jks   # вывод — в секрет KEYSTORE_BASE64
+```
+Секреты репозитория: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` (= `tf`), `KEY_PASSWORD`.
+
+## Ограничения
+- **Вход через Google и пуши Firebase** не работают: для них нужны ключи Google, выпущенные
+  именно под этот проект. Вход по почте работает, уведомления приходят через фоновый канал
+  приложения.
+- iOS-сборки нет: для неё нужен аккаунт Apple Developer.
+
+## Для разработчиков
+```bash
+flutter pub get
+flutter run --dart-define=PB_URL=https://твой-домен
+```
+- `lib/` — приложение (Flutter, Material 3)
+- `lib/config/brand.dart` — название, адрес сервера, ссылки
+- `lib/config/free_edition.dart` — флаг «всё бесплатно, без рекламы»
+- `server/` — сервер одной командой (PocketBase + hotpath/Postgres + Centrifugo + Caddy)
+- `tool/brand/` — генераторы иконок и страниц сервера
+
+## Лицензия
+[GPL-3.0](LICENSE). Основано на [Togetherly](https://github.com/THET1ME-1/Togetherly) — спасибо
+автору оригинала. Название и иконка TogetherForever не связаны с брендом Togetherly.
 
 ---
 
 ## English
 
-**Togetherly** is a warm, private app for couples (and small close groups). One shared space where your relationship lives — memories, moods, and everyday closeness — whether you're together or miles apart.
+**TogetherForever** is a free, ad-free fork of [Togetherly](https://github.com/THET1ME-1/Togetherly)
+(GPL-3.0), a private space for couples: shared memories, moods, chat, drawing together, a live map,
+home-screen widgets and more. Everything that was paid in the original (Togetherly+ and coin items)
+is unlocked, ads are removed, and there are 10 new colour themes.
 
-### What's inside
-- 📸 **Shared Memory Lane** — photos, videos, places, music, books & movies in one feed
-- 💌 **Time capsule** — seal a letter or a photo; it opens on the day you choose
-- 🔒 **Secret memories** — hide the special ones behind a PIN
-- 🏆 **Couple achievements** — milestones (100 days together, first photo, …) with confetti
-- 🗺️ **Live map "Where we are"** — see each other's location in real time
-- 🧩 **Home-screen widgets** (Android & iOS) — shared photo, days together, streak, mood
-- 😊 **Moods** — track your mood and see your partner's history
-- ⏱️ **Days together, streaks**, anniversary & birthday reminders
-- 💬 **Private chat** and "miss you" nudges with push notifications
-- 🎨 **Shared drawing canvas** and postcards
-- 🐣 **A couple mascot** that grows with your activity
-- 🎨 **20 themes** (light & dark) and themed app icons
-- 🪙 Coins & rewards, co-watch, and more
-
-### Download
-**Android** — [**GitHub Releases**](https://github.com/THET1ME-1/togetherly/releases/latest) (recommended).
-
-For auto-updates use **[Obtainium](https://github.com/ImranR98/Obtainium)**: *Add App* → paste
-`https://github.com/THET1ME-1/togetherly` → it tracks every new release (pick `arm64-v8a` — almost all modern phones).
-
-One-tap: `obtainium://add/https://github.com/THET1ME-1/togetherly`
-
-Signing fingerprint (SHA-256) to verify the APK:
-`1E:94:4F:00:FE:F1:17:D5:00:03:56:03:44:FC:BE:4F:9F:69:BF:FA:4C:F3:5B:A8:9F:26:D0:32:C3:3A:4E:13`
-
-**RuStore · Google Play · App Store** — coming soon.
-
-### Built with
-Flutter (Material 3) · Dart · self-hosted **PocketBase** (auth / data / media) · **Centrifugo** (realtime) · offline-first sync · Android & iOS.
-
-### Build from source
-```bash
-flutter pub get
-# runs against the author's backend by default; point it at your own:
-flutter run \
-  --dart-define=PB_URL=https://your-pocketbase.example.com \
-  --dart-define=CENTRIFUGO_WS=wss://your-pocketbase.example.com:8443/connection/websocket
-```
-No project keys ship in the repo — config files are `*.example` templates you fill in.
-Full guide: **[CONTRIBUTING.md](CONTRIBUTING.md)**. Security issues → **[SECURITY.md](SECURITY.md)**.
-
-### License
-[GPL-3.0](LICENSE) — free software with copyleft: any fork/derivative, when distributed,
-must stay open under the same license. The app is free to use; source © THET1ME-1.
-
----
-
-## 🩷 Togetherly (Русский)
-
-**Togetherly** — тёплое приватное приложение для пар (и небольших близких групп). Одно общее пространство, где живут ваши отношения: воспоминания, настроения и повседневная близость — вместе вы или за тысячи километров.
-
-### Что внутри
-- 📸 **Общая лента воспоминаний** — фото, видео, места, музыка, книги и фильмы в одной ленте
-- 💌 **Капсула времени** — запечатайте письмо или фото; откроется в выбранный вами день
-- 🔒 **Секретные воспоминания** — спрячьте особенное под PIN
-- 🏆 **Достижения пары** — вехи (100 дней вместе, первое фото…) с праздничным салютом
-- 🗺️ **Живая карта «Где мы»** — видите геопозицию друг друга в реальном времени
-- 🧩 **Виджеты на экране** (Android и iOS) — общее фото, дни вместе, серия, настроение
-- 😊 **Настроения** — отмечайте своё и смотрите историю партнёра
-- ⏱️ **Дни вместе, серии**, напоминания о годовщине и дне рождения
-- 💬 **Личный чат** и кнопка «Я скучаю» с пуш-уведомлениями
-- 🎨 **Общий холст для рисования** и открытки
-- 🐣 **Маскот пары**, который растёт вместе с вами
-- 🎨 **20 тем** (светлые и тёмные) и тематические иконки приложения
-- 🪙 Коины и награды, совместный просмотр и не только
-
-### Скачать
-**Android** — [**GitHub Releases**](https://github.com/THET1ME-1/togetherly/releases/latest) (рекомендуется).
-
-Для авто-обновлений используйте **[Obtainium](https://github.com/ImranR98/Obtainium)**: *Add App* → вставьте
-`https://github.com/THET1ME-1/togetherly` → он подхватывает каждый новый релиз (выбирайте `arm64-v8a` — почти все современные телефоны).
-
-One-tap: `obtainium://add/https://github.com/THET1ME-1/togetherly`
-
-Отпечаток подписи (SHA-256) для проверки APK:
-`1E:94:4F:00:FE:F1:17:D5:00:03:56:03:44:FC:BE:4F:9F:69:BF:FA:4C:F3:5B:A8:9F:26:D0:32:C3:3A:4E:13`
-
-**RuStore · Google Play · App Store** — скоро.
-
-### На чём сделано
-Flutter (Material 3) · Dart · самохост **PocketBase** (авторизация / данные / медиа) · **Centrifugo** (realtime) · offline-first синхронизация · Android и iOS.
-
-### Сборка из исходников
-```bash
-flutter pub get
-# по умолчанию цепляется к бэкенду автора; наведи на свой:
-flutter run \
-  --dart-define=PB_URL=https://твой-pocketbase.example.com \
-  --dart-define=CENTRIFUGO_WS=wss://твой-pocketbase.example.com:8443/connection/websocket
-```
-Ключей проекта в репозитории нет — конфиги идут `*.example`-шаблонами, подставь свои.
-Полный гайд: **[CONTRIBUTING.md](CONTRIBUTING.md)**. Про уязвимости — **[SECURITY.md](SECURITY.md)**.
-
-### Лицензия
-[GPL-3.0](LICENSE) — свободное ПО с копилефтом: любой форк/производная при распространении
-остаётся открытым под той же лицензией. Приложение бесплатное; исходники © THET1ME-1.
-
----
-
-<div align="center">
-
-## 👥 Team · S&amp;T Company
-
-Togetherly is built by **S&amp;T Company**
-
-| | |
-|:--|:--|
-| [**THET1ME-1**](https://github.com/THET1ME-1) | founder · lead dev |
-| [**JbSharan2**](https://github.com/JbSharan2) | co-founder |
-
-<br>
-
-<sub>Made with Flutter &amp; 💛 · <code>com.togetherly.love</code></sub>
-
-</div>
+It runs on **your own server**: `server/install.sh` deploys the whole backend (PocketBase, hotpath +
+Postgres, Centrifugo, Caddy with automatic HTTPS) with one command. Set the repository variable
+`PB_URL` and GitHub Actions builds the APK and publishes it to Releases.

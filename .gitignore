@@ -117,3 +117,5 @@ scratchpad/
 # им нельзя. Сборка описана в pocketbase/pb-cgo/README.md.
 pocketbase/pb-cgo/pocketbase-cgo*
 .wrangler/
+server/.env
+server/data/

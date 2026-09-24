@@ -1,0 +1,19 @@
+# PocketBase с нативным SQLite (pocketbase/pb-cgo) + хуки и статика.
+FROM golang:1.25-bookworm AS build
+WORKDIR /src
+COPY pocketbase/pb-cgo/ .
+RUN CGO_ENABLED=1 go build -tags "sqlite_json sqlite_fts5" -ldflags "-s -w" -o /pocketbase .
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates tzdata \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /pb
+COPY --from=build /pocketbase /pb/pocketbase
+COPY pocketbase/pb_hooks /pb/pb_hooks
+COPY pocketbase/pb_public /pb/pb_public
+# Ссылки «скачать APK» и «исходники» на страницах сервера.
+ARG REPO_URL=https://github.com/Admin228355/Admin228355
+RUN grep -rl "__REPO_URL__" /pb/pb_hooks /pb/pb_public \
+    | xargs -r sed -i "s#__REPO_URL__#${REPO_URL}#g"
+CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8090", "--dir=/pb/pb_data"]

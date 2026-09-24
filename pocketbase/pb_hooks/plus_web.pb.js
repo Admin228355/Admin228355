@@ -1,9 +1,9 @@
-/// plus_web.pb.js — активация Togetherly+ на сайте, без участия приложения.
+/// plus_web.pb.js — активация TogetherForever+ на сайте, без участия приложения.
 ///
 /// Зачем. Оплата на lava.top ставит `plus` сама, если почта платежа совпала с
 /// почтой аккаунта (`lava.pb.js`). Не совпала — покупка превращается в код
 /// `TG…`, его выдаёт бот. А погасить код можно было только на экране
-/// Togetherly+, которого на iPhone нет вовсе: человек платил и упирался в
+/// TogetherForever+, которого на iPhone нет вовсе: человек платил и упирался в
 /// тупик. Эта страница закрывает разрыв — приложение о ней ничего не знает и
 /// нигде её не показывает.
 ///
@@ -19,7 +19,7 @@ routerAdd("GET", "/plus", (e) => {
     '<!doctype html><html lang="ru"><head><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width,initial-scale=1">' +
     '<meta name="robots" content="noindex">' +
-    "<title>Активация Togetherly+</title><style>" +
+    "<title>Активация TogetherForever+</title><style>" +
     ":root{color-scheme:light dark}" +
     "body{margin:0;min-height:100vh;display:grid;place-items:center;" +
     "font:16px/1.5 system-ui,sans-serif;background:#F6EFFB;color:#1D1B20}" +
@@ -38,7 +38,7 @@ routerAdd("GET", "/plus", (e) => {
     "#msg{margin:16px 0 0;font-size:15px;min-height:24px}" +
     ".ok{color:#2E7D32}.err{color:#B3261E}" +
     "</style></head><body><div class=card>" +
-    "<h1>Активация Togetherly+</h1>" +
+    "<h1>Активация TogetherForever+</h1>" +
     "<p>Код пришёл после оплаты. Почту укажите ту, с которой вы входите в приложение.</p>" +
     '<label for=code>Код</label><input id=code placeholder="TG-XXXX-XXXX" autocomplete=off>' +
     '<label for=email>Почта аккаунта</label><input id=email type=email placeholder="you@example.com" autocomplete=email>' +

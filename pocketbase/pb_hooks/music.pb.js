@@ -36,7 +36,7 @@ routerAdd("GET", "/api/music/yandex", (e) => {
         "Accept": "application/json",
         // Яндекс отдаёт JSON и без этого, но пусть в их логах будет видно, кто
         // ходит: правило вежливости то же, что у Викисклада в Plein.
-        "User-Agent": "TogetherlyBot/1.0 (+https://togetherly.day)",
+        "User-Agent": "TogetherForeverBot/1.0",
       },
       timeout: 8,
     });

@@ -1,0 +1,40 @@
+# TogetherForever: один домен на всё.
+#   /connection/*          -> Centrifugo (realtime)
+#   горячие коллекции      -> hotpath (Postgres)
+#   всё остальное          -> PocketBase
+# SITE_ADDRESS — домен (сертификат Let's Encrypt Caddy выпустит сам).
+# APP_HOST — где слушают PocketBase/hotpath/Centrifugo (в docker — pocketbase).
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	request_body {
+		max_size 210MB
+	}
+
+	@centrifugo path /connection/*
+	handle @centrifugo {
+		reverse_proxy {$APP_HOST}:8000
+	}
+
+	# Служебные ручки hotpath наружу не отдаём.
+	@internal path /internal/*
+	handle @internal {
+		respond 404
+	}
+
+	@hot path_regexp hot ^/api/collections/(canvas_strokes|chat_messages|memories|widget_data|user_presence|chat_typing|chat_reads|live_location|canvas_meta|miss_you|groups|mood_entries)/records
+	handle @hot {
+		reverse_proxy {$APP_HOST}:8120
+	}
+
+	@hotapi path /api/group/* /api/coins/daily-bonus /api/note/export /api/movies/search
+	handle @hotapi {
+		reverse_proxy {$APP_HOST}:8120
+	}
+
+	handle {
+		reverse_proxy {$APP_HOST}:8090 {
+			flush_interval -1
+		}
+	}
+}

@@ -50,7 +50,7 @@
       'privacy.3.text': 'Видео отдаёт площадка, а не мы.',
 
       'promo.kicker': '→ А ещё есть приложение',
-      'promo.title': 'Togetherly для пар',
+      'promo.title': 'TogetherForever для пар',
       'promo.text': 'Общие воспоминания, календарь настроений, подарки друг другу и виджеты на экране телефона.',
       'promo.btn': 'Скачать',
 
@@ -61,7 +61,7 @@
       'foot.col.app': 'Приложение',
       'foot.col.help': 'Поддержка',
       'foot.github': 'GitHub Releases',
-      'foot.rights': '© 2026 Togetherly. Все права защищены.',
+      'foot.rights': '© 2026 TogetherForever. Все права защищены.',
       'foot.made': 'Сделано для тех, кто далеко друг от друга.',
 
       // комната
@@ -108,8 +108,8 @@
       'room.partnerJoined': 'Партнёр в комнате',
 
       'gate.closedTitle': 'Комната пары',
-      'gate.closedText': 'Сюда пускают только вас двоих. Войдите тем же аккаунтом, что в приложении Togetherly. Если код набирали вручную, проверьте его.',
-      'gate.closedAppText': 'Приложение не успело открыть комнату. Закройте её и откройте снова. Не поможет, войдите почтой и паролем от Togetherly.',
+      'gate.closedText': 'Сюда пускают только вас двоих. Войдите тем же аккаунтом, что в приложении TogetherForever. Если код набирали вручную, проверьте его.',
+      'gate.closedAppText': 'Приложение не успело открыть комнату. Закройте её и откройте снова. Не поможет, войдите почтой и паролем от TogetherForever.',
       'gate.strangerTitle': 'Это не ваша комната',
       'gate.strangerText': 'Аккаунт {who} не состоит в этой паре. Войдите тем аккаунтом, с которым вы в паре, или создайте свою комнату.',
       'gate.thisAccount': 'на этой странице',
@@ -170,7 +170,7 @@
       'privacy.3.text': 'Video comes from the platform, not from us.',
 
       'promo.kicker': '→ There is an app, too',
-      'promo.title': 'Togetherly for couples',
+      'promo.title': 'TogetherForever for couples',
       'promo.text': 'Shared memories, a mood calendar, gifts for each other and widgets on your home screen.',
       'promo.btn': 'Download',
 
@@ -181,7 +181,7 @@
       'foot.col.app': 'App',
       'foot.col.help': 'Support',
       'foot.github': 'GitHub Releases',
-      'foot.rights': '© 2026 Togetherly. All rights reserved.',
+      'foot.rights': '© 2026 TogetherForever. All rights reserved.',
       'foot.made': 'Made for those who are far apart.',
 
       'room.copy': 'Copy link',
@@ -227,8 +227,8 @@
       'room.partnerJoined': 'Your partner is here',
 
       'gate.closedTitle': 'A couple\u2019s room',
-      'gate.closedText': 'Only the two of you can come in. Sign in with the account you use in the Togetherly app. If you typed the code by hand, check it.',
-      'gate.closedAppText': 'The app didn\u2019t open the room in time. Close it and open it again. If that doesn\u2019t help, sign in with your Togetherly email and password.',
+      'gate.closedText': 'Only the two of you can come in. Sign in with the account you use in the TogetherForever app. If you typed the code by hand, check it.',
+      'gate.closedAppText': 'The app didn\u2019t open the room in time. Close it and open it again. If that doesn\u2019t help, sign in with your TogetherForever email and password.',
       'gate.strangerTitle': 'This room isn\u2019t yours',
       'gate.strangerText': 'The account {who} isn\u2019t part of this couple. Sign in with the account you share a couple with, or create your own room.',
       'gate.thisAccount': 'on this page',

@@ -1,4 +1,4 @@
-/// Покупка Togetherly+ через СЧЁТ lava.top, а не через витрину.
+/// Покупка TogetherForever+ через СЧЁТ lava.top, а не через витрину.
 ///
 /// Зачем: уведомления lava.top приходят ТОЛЬКО по счетам, созданным их API.
 /// Покупка по прямой ссылке на товар (`app.lava.top/products/…`) не порождает
@@ -74,7 +74,7 @@ routerAdd("POST", "/api/lava/checkout", (e) => {
     groupId = String(body.groupId || body.pairId || "").trim();
   } catch (_) {}
 
-  // Без `feature` это покупка Togetherly+ — прежнее поведение хука.
+  // Без `feature` это покупка TogetherForever+ — прежнее поведение хука.
   let OFFER = PLUS_OFFER;
   // Кому откроется доступ. У подарка это партнёр, и его же надо записать в
   // счёт: крон-подстраховка ниже выдаёт Плюс по `user_uid`, и с покупателем в
@@ -87,7 +87,7 @@ routerAdd("POST", "/api/lava/checkout", (e) => {
     if (String($os.getenv("LAVA_PLUS_GIFT_ENABLED") || "1") === "0") {
       return e.json(400, { ok: false, error: "gift_disabled" });
     }
-    // Дарить можно только Togetherly+: у элементов каталога владение и так
+    // Дарить можно только TogetherForever+: у элементов каталога владение и так
     // общее на пару, второй раз за них никто не платит.
     if (feature) return e.json(400, { ok: false, error: "gift_plus_only" });
 
@@ -310,7 +310,7 @@ routerAdd("POST", "/api/lava/checkout", (e) => {
     rec.set("email", email);
     rec.set("status", String(data.status || "NEW").toUpperCase());
     rec.set("granted", false);
-    // Пусто — счёт за Togetherly+; иначе ключ владения, который выдаст крон,
+    // Пусто — счёт за TogetherForever+; иначе ключ владения, который выдаст крон,
     // если вебхук по этой оплате потеряется.
     rec.set("feature", feature);
     // Кто подарил. Пусто у обычной покупки; по нему получатель узнаёт, от кого
@@ -513,7 +513,7 @@ routerAdd("GET", "/api/lava/gift", (e) => {
     price: price,
     basePrice: base,
     discount: discount > 0 && discount < 100 ? discount : 0,
-    // Обычная покупка Togetherly+ в той же валюте. Отсюда витрина берёт сумму
+    // Обычная покупка TogetherForever+ в той же валюте. Отсюда витрина берёт сумму
     // на кнопку «Купить»: в сборках с сайта магазина нет, и до этого цену
     // человек узнавал только на странице оплаты.
     plusPrice: saleDeal.price,
@@ -641,7 +641,7 @@ cronAdd("lavaInvoicePoll", "*/6 * * * *", () => {
             const push = require(`${__hooks}/apns_push.js`);
             push.sendTo(
               user.id,
-              "Togetherly+ — подарок 💜",
+              "TogetherForever+ — подарок 💜",
               from ? from + " подарил(а) вам полный доступ" : "Вам подарили полный доступ",
               "plusgift");
           } catch (err) {

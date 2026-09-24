@@ -34,7 +34,7 @@ class Brand {
   /// Репозиторий проекта: исходники, релизы, баги. CI подставляет свой.
   static const String repoUrl = String.fromEnvironment(
     'REPO_URL',
-    defaultValue: 'https://github.com/Admin228355/TogetherForever',
+    defaultValue: 'https://github.com/Admin228355/Admin228355',
   );
 
   static const String issuesUrl = '$repoUrl/issues';

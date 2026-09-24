@@ -63,7 +63,7 @@ routerAdd("POST", "/api/coins/redeem", (e) => {
         return;
       }
 
-      // Код Togetherly+ монет не несёт — он открывает возможности. Проверяем
+      // Код TogetherForever+ монет не несёт — он открывает возможности. Проверяем
       // это раньше суммы, иначе такой код упёрся бы в «invalid_code».
       const isPlus = rec.getBool("plus");
       if (isPlus) {
@@ -74,7 +74,7 @@ routerAdd("POST", "/api/coins/redeem", (e) => {
         user.set("plus", true);
         // Код от бота — оплата шла мимо магазина; помечаем, чтобы поддержка
         // не гадала, откуда доступ (особенно у тех, кто сидит с iPhone, где
-        // витрины Togetherly+ нет).
+        // витрины TogetherForever+ нет).
         user.set("plus_platform", "code");
         txApp.save(user);
         out = { s: 200, b: { ok: true, plus: true, awarded: 0 } };
