@@ -1,3 +1,4 @@
+import '../config/free_edition.dart';
 import 'dart:convert';
 import 'dart:io' show Platform;
 
@@ -180,6 +181,9 @@ class UpdateService {
   /// Возвращает [GithubUpdate], если в публичном репо лежит версия новее
   /// установленной, иначе `null` (нет обновления / ошибка сети / ошибка парсинга).
   static Future<GithubUpdate?> checkForUpdate() async {
+    // Бесплатная сборка не предлагает APK оригинала: он с рекламой и другим
+    // идентификатором приложения.
+    if (kFreeEdition) return null;
     try {
       final resp = await http
           .get(Uri.parse(_versionJsonUrl))

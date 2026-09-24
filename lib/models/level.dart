@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/free_edition.dart';
 import '../dict_strings.dart';
 
 /// Чистая модель уровней/рангов ПАРЫ. Level и Rank выводятся из общего XP и
@@ -223,8 +224,10 @@ class Unlock {
       case UnlockType.free:
         return true;
       case UnlockType.level:
-        return level >= requiredLevel;
+        return kFreeEdition || level >= requiredLevel;
       case UnlockType.premium:
+        // Бесплатная сборка: всё, что продавалось за монеты, открыто.
+        if (kFreeEdition) return true;
         // Купленное остаётся у человека навсегда — в том числе когда Плюс
         // кончился. Отбирать оплаченное нельзя.
         return owned || (plusIncluded && plus);

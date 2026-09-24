@@ -1,3 +1,4 @@
+import '../config/free_edition.dart';
 import '../utils/safe_pick.dart';
 import '../services/plus_service.dart';
 import '../services/plus_access.dart';
@@ -624,7 +625,9 @@ class _MemoryLaneScreenState extends State<MemoryLaneScreen> {
           // Сбрасываем накопленный чанк тайлов (он остаётся внутри своей даты).
           slivers.add(_memoryTilesSliver(mems.sublist(chunkStart, i + 1)));
           chunkStart = i + 1;
-          if (adHere) slivers.add(_inFeedBannerSliver(adIndex++));
+          if (!kFreeEdition && adHere) {
+            slivers.add(_inFeedBannerSliver(adIndex++));
+          }
         }
       }
     }

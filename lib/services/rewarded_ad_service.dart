@@ -1,3 +1,4 @@
+import '../config/free_edition.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -90,7 +91,7 @@ class RewardedAdService {
   /// Предзагружает рекламу: сначала Яндекс, при неудаче — AdMob.
   /// Безопасно дёргать несколько раз.
   Future<void> load() async {
-    if (_disposed) return;
+    if (kFreeEdition || _disposed) return;
     if (_isLoading || isReady) return;
     if (!Platform.isAndroid && !Platform.isIOS) return;
     _retryTimer?.cancel();
@@ -173,6 +174,7 @@ class RewardedAdService {
   /// награда начисляется внутри [_showYandex] (callable), для AdMob — на сервере
   /// через SSV.
   Future<bool> show({required String uid}) async {
+    if (kFreeEdition) return false;
     // Уже идёт показ — игнорируем повторный вызов (двойной тап/гонка), иначе
     // запустится второй ролик подряд.
     if (_isShowing) return false;

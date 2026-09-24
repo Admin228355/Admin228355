@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/free_edition.dart';
 import '../models/plus_gift.dart';
 import '../models/store_currency.dart';
 import 'coin_store.dart' show kStore;
@@ -60,7 +61,7 @@ class PlusService extends ChangeNotifier {
   static const String _cacheUidKey = 'plus_active_uid';
 
   /// Куплен ли Togetherly+.
-  bool get active => _active;
+  bool get active => kFreeEdition || _active;
 
   /// Прочитан ли флаг `users.plus` ЭТОГО аккаунта — с сервера или из локальной
   /// копии.
@@ -75,6 +76,7 @@ class PlusService extends ChangeNotifier {
   /// Считается по идентификатору аккаунта, а не флажком: сменился человек на
   /// телефоне — прежний ответ к нему не относится, и спрашивать надо заново.
   bool get known {
+    if (kFreeEdition) return true;
     final uid = PocketBaseService().userId ?? '';
     return uid.isNotEmpty && uid == _knownUid;
   }
@@ -94,7 +96,7 @@ class PlusService extends ChangeNotifier {
   /// Можно ли предлагать покупку в этой сборке. GitHub и RuStore ведут на
   /// lava.top, Play — в свой биллинг (мимо него платить нельзя, забанят).
   static bool get canPurchase =>
-      buysInStore || kStore == 'github' || kStore == 'rustore';
+      !kFreeEdition && (buysInStore || kStore == 'github' || kStore == 'rustore');
 
   /// Валюта этого человека: рубли, евро или доллары — по стране устройства.
   ///
@@ -127,14 +129,14 @@ class PlusService extends ChangeNotifier {
 
   /// Что рисовать на месте платной вещи: открыто, под замком или не показывать
   /// вовсе. Правило одно на всё приложение — [PlusAccess.gate].
-  PlusGate get gate => PlusAccess.gate(active: _active, exists: exists);
+  PlusGate get gate => PlusAccess.gate(active: active, exists: exists);
 
   /// Показывать ли платное место в интерфейсе. false — на этой платформе его
   /// не существует, и человек не должен о нём узнать.
   bool get visible => gate != PlusGate.hidden;
 
   /// Открыта ли возможность прямо сейчас.
-  bool allows(PlusFeature feature) => _active;
+  bool allows(PlusFeature feature) => active;
 
   /// Поднимает последний известный ответ сервера с диска, а если его нет —
   /// ходит на сервер.
@@ -208,7 +210,8 @@ class PlusService extends ChangeNotifier {
 
   /// Просит ежемесячные монеты. Сервер сам решит, прошёл ли месяц.
   Future<int> claimMonthlyCoins() async {
-    if (!_active) return 0;
+    // В бесплатной сборке флага на сервере нет — не дёргаем его зря.
+    if (kFreeEdition || !_active) return 0;
     try {
       final res = await PbCoinsService().plusMonthly();
       if (res == null || res['ok'] != true) return 0;

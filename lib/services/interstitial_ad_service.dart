@@ -1,3 +1,4 @@
+import '../config/free_edition.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -44,7 +45,7 @@ class InterstitialAdService {
   /// Предзагрузка. Звать заранее — на входе в экран, а не в момент показа:
   /// загрузка занимает секунды, и ждать её человеку не за чем.
   Future<void> load() async {
-    if (_disposed || _isLoading || isReady) return;
+    if (kFreeEdition || _disposed || _isLoading || isReady) return;
     if (!Platform.isAndroid && !Platform.isIOS) return;
     _isLoading = true;
     await _loadYandex();
@@ -115,7 +116,7 @@ class InterstitialAdService {
   Future<bool> show({
     Duration timeout = const Duration(seconds: 60),
   }) async {
-    if (_isShowing || !isReady) return false;
+    if (kFreeEdition || _isShowing || !isReady) return false;
     _isShowing = true;
     try {
       if (_yandexAd != null) return await _showYandex(timeout);

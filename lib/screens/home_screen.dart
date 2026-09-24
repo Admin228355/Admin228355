@@ -1,3 +1,4 @@
+import '../config/free_edition.dart';
 import 'dart:async';
 import '../utils/safe_launch.dart';
 import 'dart:io';
@@ -1713,7 +1714,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   // трогает, а в зону видимости попадает при первом же
                   // движении пальца. Выше по экрану её ставить нельзя, там
                   // таймер и настроения, ради которых приложение открывают.
-                  Padding(
+                  if (!kFreeEdition) Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: AdBanner(
                       key: const ValueKey('home_ad'),

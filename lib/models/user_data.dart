@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../config/free_edition.dart';
 import '../utils/date_only.dart';
 import 'dart:convert';
 import 'dart:ui';
@@ -398,6 +399,7 @@ class UserData extends ChangeNotifier {
 
   /// Разблокирована ли фича пользователем.
   bool ownsFeature(String id) {
+    if (kFreeEdition) return true;
     if (_ownedFeatures.contains(id)) return true;
     // Фото в виджете дней даётся ещё и пробой за рекламу — на неделю.
     if (id == featureDaysWidgetPhotos) {
@@ -1157,7 +1159,7 @@ class UserData extends ChangeNotifier {
   Future<void> setThemeId(int id) async {
     final ownCustom =
         isCustomPaletteIndex(id) && customPaletteSlot(id) < _customThemes.length;
-    if (!ownCustom && (id < 0 || id >= AppThemes.all.length)) return;
+    if (!ownCustom && (id < 0 || id >= kPalettes.length)) return;
     _themeId = id;
     await _saveLocal();
     notifyListeners();

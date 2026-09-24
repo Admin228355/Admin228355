@@ -1,3 +1,4 @@
+import 'config/free_edition.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
@@ -779,7 +780,7 @@ class _LoveAppState extends State<LoveApp> with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('Старт: токен FCM не получен — $e');
     }
-    if (Platform.isAndroid || Platform.isIOS) {
+    if (!kFreeEdition && (Platform.isAndroid || Platform.isIOS)) {
       try {
         await _initConsentAndAds();
       } catch (e) {
@@ -962,7 +963,7 @@ class _LoveAppState extends State<LoveApp> with WidgetsBindingObserver {
 
   Widget _buildInitialScreen() {
     // 0. Обязательное обновление — блокирующий экран поверх всего.
-    if (_forceUpdate) {
+    if (_forceUpdate && !kFreeEdition) {
       return const ForceUpdateScreen();
     }
     // 1. Первый запуск — показываем welcome

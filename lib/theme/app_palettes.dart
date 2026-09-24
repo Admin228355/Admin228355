@@ -160,6 +160,19 @@ const List<Palette> kPalettes = [
   Palette(22, 'Тёмный лес', Color(0xFF2FA355), isPremium: true, price: 30, target: PaletteTarget('чаща', 155, 40, 0.92)),
   Palette(23, 'Гранат', Color(0xFFE05A62), isPremium: true, price: 30, target: PaletteTarget('зерно граната', 15, 48, 0.92)),
   Palette(24, 'Тёмный мёд', Color(0xFFC8912E), isPremium: true, price: 30, target: PaletteTarget('тёмный мёд', 68, 60, 0.92)),
+  // ── Бесплатная сборка: дополнительные палитры ──────────────────────────────
+  // Ручной пары AppTheme у них нет — тема целиком считается из цели (как у
+  // своей темы), поэтому обе яркости и AMOLED работают сразу.
+  Palette(25, 'Сакура', Color(0xFFF4A7C0), target: PaletteTarget('лепесток сакуры', 350, 80, 0.55)),
+  Palette(26, 'Фуксия', Color(0xFFD63AAF), target: PaletteTarget('цветок фуксии', 330, 50, 1.0)),
+  Palette(27, 'Коралловая', Color(0xFFFF7F66), target: PaletteTarget('коралл', 25, 66, 0.95)),
+  Palette(28, 'Сиреневая', Color(0xFF9B7BD9), target: PaletteTarget('куст сирени', 295, 58, 0.7)),
+  Palette(29, 'Индиго', Color(0xFF3F3DBF), target: PaletteTarget('индиго', 280, 34, 0.95)),
+  Palette(30, 'Изумрудная', Color(0xFF10A36B), target: PaletteTarget('изумруд', 160, 58, 1.0)),
+  Palette(31, 'Оливковая', Color(0xFF8A8F3C), target: PaletteTarget('оливка', 105, 58, 0.6)),
+  Palette(32, 'Карамельная', Color(0xFFD9964B), target: PaletteTarget('карамель', 60, 66, 0.7)),
+  Palette(33, 'Васильковая', Color(0xFF5B7FFF), target: PaletteTarget('василёк', 265, 55, 0.95)),
+  Palette(34, 'Небесная', Color(0xFF8FD3FF), target: PaletteTarget('весеннее небо', 230, 82, 0.7)),
 ];
 
 /// Вариант схемы для палитры при выбранной насыщенности.
@@ -295,7 +308,10 @@ AppTheme buildAppTheme(
   // с галочкой, а приложение оставалось розовым (снимки человека, 18.08.2026).
   // Стережёт test/theme/custom_theme_applies_test.dart.
   final own = isCustomPaletteIndex(p.index);
-  final legacy = own ? null : AppThemes.byIndex(p.index);
+  // Новые палитры бесплатной сборки ручной темы не имеют — считаем их.
+  final legacy = (own || p.index >= AppThemes.all.length)
+      ? null
+      : AppThemes.byIndex(p.index);
   if (legacy != null && legacy.brightness == brightness && !amoled) {
     return _juiced(legacy, flavor, p);
   }

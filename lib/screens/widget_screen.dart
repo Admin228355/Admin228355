@@ -1,3 +1,4 @@
+import '../config/free_edition.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -1817,7 +1818,7 @@ class _WidgetScreenState extends State<WidgetScreen>
     }
 
     void banner(String slot) {
-      if (!isPaired || out.isEmpty) return;
+      if (kFreeEdition || !isPaired || out.isEmpty) return;
       gap();
       out.add(_buildAdBanner(slot));
     }

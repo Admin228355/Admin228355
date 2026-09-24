@@ -304,7 +304,7 @@ class MainActivity : FlutterActivity() {
                     try {
                         val pm = packageManager
                         for ((aliasId, suffix) in ICON_ALIASES) {
-                            val component = ComponentName(packageName, "$packageName$suffix")
+                            val component = ComponentName(packageName, "com.togetherly.love$suffix")
                             val state = if (aliasId == id)
                                 PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                             else
@@ -332,7 +332,7 @@ class MainActivity : FlutterActivity() {
                         val pm = packageManager
                         val on = mutableListOf<String>()
                         for ((aliasId, suffix) in ICON_ALIASES) {
-                            val component = ComponentName(packageName, "$packageName$suffix")
+                            val component = ComponentName(packageName, "com.togetherly.love$suffix")
                             val state = pm.getComponentEnabledSetting(component)
                             val enabled = when (state) {
                                 PackageManager.COMPONENT_ENABLED_STATE_ENABLED -> true

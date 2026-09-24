@@ -4986,6 +4986,10 @@ class _ProfileScreenState extends State<ProfileScreen>
       _s.themeNameGarnet,
       _s.themeNameDarkHoney,
     ];
+    // Палитры бесплатной сборки живут без переводов — имя из самой палитры.
+    if (index >= names.length && index < kPalettes.length) {
+      return kPalettes[index].name;
+    }
     if (index < 0 || index >= names.length) return names[0];
     return names[index];
   }

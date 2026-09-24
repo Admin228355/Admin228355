@@ -1,3 +1,4 @@
+import '../../config/free_edition.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -85,6 +86,8 @@ class _AdBannerState extends State<AdBanner> {
   @override
   void initState() {
     super.initState();
+    // Бесплатная сборка: рекламы нет, блок ничего не заказывает.
+    if (kFreeEdition) return;
     // Детектор видимости в бою оказался ненадёжен: событий показа не пришло
     // ни одного — ни с главной, ни из ленты, — и баннер молча ждал разрешения
     // загрузиться. Ждём его три секунды, дальше грузим сами. Ленивость от
@@ -98,6 +101,7 @@ class _AdBannerState extends State<AdBanner> {
   }
 
   void _onVisible(VisibilityInfo info) {
+    if (kFreeEdition) return;
     if (_requested || info.visibleFraction <= 0) return;
     _requested = true;
     _fallback?.cancel();
@@ -188,6 +192,7 @@ class _AdBannerState extends State<AdBanner> {
 
   @override
   Widget build(BuildContext context) {
+    if (kFreeEdition) return const SizedBox.shrink();
     return LayoutBuilder(builder: (context, constraints) {
       if (constraints.maxWidth.isFinite && constraints.maxWidth > 0) {
         _slotWidth = constraints.maxWidth;

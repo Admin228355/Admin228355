@@ -4,6 +4,7 @@ import '../utils/safe_launch.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../config/free_edition.dart';
 import '../models/level.dart';
 import '../models/mood_pack.dart';
 import '../models/user_data.dart';
@@ -73,7 +74,11 @@ class MoodPackSelector extends StatelessWidget {
     final byPair = pairOwned.contains(key) ||
         CatalogService.instance.pairOwned.contains(key);
     final u = user;
-    if (u == null) return byPair || !pack.unlock.isForSale;
+    if (u == null) {
+      return byPair ||
+          !pack.unlock.isForSale ||
+          (kFreeEdition && !pack.unlock.isMoney);
+    }
     return u.unlocksCatalogItem(
       pack.unlock,
       kMoodPackFeatureKind,

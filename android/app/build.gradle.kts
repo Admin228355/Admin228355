@@ -62,7 +62,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.togetherly.love"
+        applicationId = "com.togetherly.love.free"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
