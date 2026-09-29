@@ -434,3 +434,41 @@ MODELS = {
     "terrain_grass_tuft": (grass_tuft, 9308, "Куст травы"),
     "terrain_mound": (mound, 9309, "Земляной бугор"),
 }
+
+
+# ---------------------------------------------------------------------- 1-block 45-degree pieces (stair replacements)
+def stair_slope45(dens=4):
+    """Straight 45-degree slope inside one block (rises to the SOUTH)."""
+    m = Model("terrain_slope45", dens)
+    h = lambda x, z: np.clip(z, 0, 16)
+    diamond_x(m, "ramp", 0, 16, 16, terrain(h, seed=1), skip=("up", "down", "south"))
+    m.box("back", (0, 0, 15.99), (16, 16, 16), terrain(h, seed=1), skip=("up", "down", "north", "west", "east"))
+    m.box("bottom", (0, 0, 0), (16, 0.01, 16), terrain(None, seed=1), skip=("up", "north", "south", "west", "east"))
+    fit_cube(m)
+    return m
+
+
+def stair_inner45(dens=4):
+    """Concave 45-degree corner inside one block (raised ground to the SOUTH and EAST)."""
+    m = Model("terrain_slope45_inner", dens)
+    h = lambda x, z: np.clip(np.maximum(x, z), 0, 16)
+    diamond_x(m, "ramp_s", 0, 16, 16, terrain(h, seed=2), skip=("up", "down", "south"))
+    diamond_z(m, "ramp_e", 0, 16, 16, terrain(h, seed=2), skip=("east", "down"))
+    m.box("back_s", (0, 0, 15.99), (16, 16, 16), terrain(h, seed=2), skip=("up", "down", "north", "west", "east"))
+    m.box("back_e", (15.99, 0, 0), (16, 16, 16), terrain(h, seed=2), skip=("up", "down", "north", "south", "west"))
+    m.box("bottom", (0, 0, 0), (16, 0.01, 16), terrain(None, seed=2), skip=("up", "north", "south", "west", "east"))
+    fit_cube(m)
+    return m
+
+
+def stair_outer45(dens=4):
+    """Convex 45-degree corner inside one block (raised ground diagonal, SOUTH-EAST)."""
+    m = Model("terrain_slope45_outer", dens)
+    h = lambda x, z: np.clip(np.minimum(x, z), 0, 16)
+    diamond_x(m, "ramp_s", 0, 16, 16, terrain(h, seed=3), skip=("up", "down", "south"))
+    diamond_z(m, "ramp_e", 0, 16, 16, terrain(h, seed=3), skip=("east", "down"))
+    m.box("back_s", (0, 0, 15.99), (16, 16, 16), terrain(h, seed=3), skip=("up", "down", "north", "west", "east"))
+    m.box("back_e", (15.99, 0, 0), (16, 16, 16), terrain(h, seed=3), skip=("up", "down", "north", "south", "west"))
+    m.box("bottom", (0, 0, 0), (16, 0.01, 16), terrain(None, seed=3), skip=("up", "north", "south", "west", "east"))
+    fit_cube(m)
+    return m
