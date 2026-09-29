@@ -69,13 +69,13 @@ def _stone(X, Y, Z, seed, moss=True, top=False):
     return img
 
 
-def terrain(height=None, band=1.4, clip=True, seed=0):
+def terrain(height=None, band=1.4, clip=True, seed=0, grass_sides=False):
     """Grass on surfaces that face up, dirt on sides with a grass rim under `height(x, z)`.
     Texels that land outside the block (0..16 cube) become transparent."""
     def paint(ctx):
         X, Y, Z = world_pts(ctx)
         n = world_normal(ctx)
-        if n[1] > 0.3:
+        if n[1] > 0.3 or (grass_sides and n[1] > -0.3):
             img = _grass(X, Y, Z, seed)
         else:
             img = _dirt(X, Y, Z, seed)
@@ -91,8 +91,8 @@ def terrain(height=None, band=1.4, clip=True, seed=0):
         if clip:
             e = 0.02
             out = (X < -e) | (X > 16 + e) | (Y < -e) | (Y > 16 + e) | (Z < -e) | (Z > 16 + e)
-            if height is not None and n[1] <= 0.3:
-                out |= Y > height(X, Z) + e * 10
+            if height is not None:  # nothing may stick out above the intended surface
+                out |= Y > height(X, Z) + (0.2 if n[1] <= 0.3 else 0.05)
             img[out, 3] = 0
         return img
     return paint
@@ -149,16 +149,15 @@ def slope_inner(dens=4):
     return m
 
 
-def slope_outer(dens=4, strips=32):
+def slope_outer(dens=4):
+    """Convex corner: the two ramps (rising south / rising east), each cut by alpha to the part where it
+    is the lower one, so together they form the exact surface h = min(x, z) with a clean ridge."""
     m = Model("terrain_slope_outer", dens)
     h = lambda x, z: np.clip(np.minimum(x, z), 0, 16)
-    w = 16 / strips
-    for i in range(strips):
-        x1, x2 = i * w, (i + 1) * w
-        c = (x1 + x2) / 2
-        p = terrain(h, seed=3)
-        diamond_x(m, f"ramp_{i}", x1, x2, c, p, skip=("up", "down", "south"))
-        m.box(f"top_{i}", (x1, 0, c), (x2, c, 16), p, skip=("down", "north"))
+    diamond_x(m, "ramp_south", 0, 16, 16, terrain(h, seed=3), skip=("up", "down", "south"))
+    diamond_z(m, "ramp_east", 0, 16, 16, terrain(h, seed=3), skip=("east", "down"))
+    m.box("back_south", (0, 0, 15.99), (16, 16, 16), terrain(h, seed=3), skip=("up", "down", "north", "west", "east"))
+    m.box("back_east", (15.99, 0, 0), (16, 16, 16), terrain(h, seed=3), skip=("up", "down", "north", "south", "west"))
     m.box("bottom", (0, 0, 0), (16, 0.01, 16), terrain(None, seed=3), skip=("up", "north", "south", "west", "east"))
     fit_cube(m)
     return m
