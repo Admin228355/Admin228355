@@ -18,8 +18,13 @@ ROOT = os.path.dirname(HERE)
 PACK = os.path.join(ROOT, "resourcepack")
 PREV = os.path.join(ROOT, "previews")
 DIST = os.path.join(ROOT, "dist")
-PACK_NAME = "zona_furniture_1.16.5"
-TEX_SIZE = 64  # every texture is exactly 64x64
+TEX_SIZE = int(os.environ.get("TEX_SIZE", "64"))  # every texture is exactly TEX_SIZE x TEX_SIZE
+if TEX_SIZE != 64:  # extra resolutions go to their own folder, same asset paths inside
+    ROOT = os.path.join(ROOT, f"variant_{TEX_SIZE}x{TEX_SIZE}")
+    PACK = os.path.join(ROOT, "resourcepack")
+    PREV = os.path.join(ROOT, "previews")
+    DIST = os.path.join(ROOT, "dist")
+PACK_NAME = f"zona_furniture_1.16.5_{TEX_SIZE}x"
 
 
 def write_pack_meta(icon=None):
@@ -53,6 +58,7 @@ def write_overrides():
 def build_one(name):
     fn, cmd, title = MODELS[name]
     m = fn()
+    m.dens = TEX_SIZE / 16  # start dense, build() steps down until the model fits the atlas
     m.build(size=TEX_SIZE)
     m.auto_display()
     m.write(PACK)

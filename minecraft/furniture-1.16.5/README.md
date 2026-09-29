@@ -25,7 +25,7 @@ resourcepack/
   assets/minecraft/models/item/paper.json         overrides по custom_model_data
   assets/zona_item/models/item/<model>.json       модель (Java Block/Item)
   assets/zona_item/textures/item/<model>.png      текстура 64x64
-dist/zona_furniture_1.16.5.zip                    готовый к установке пак
+dist/zona_furniture_1.16.5_64x.zip                  готовый к установке пак
 previews/                                         рендеры (иконка в слоте, ракурсы)
 generator/                                        исходник генератора моделей и текстур
 ```
@@ -72,3 +72,11 @@ python3 build.py furn_dresser_wood    # одна модель
 ```
 
 Скрипт генерирует JSON и текстуры, проверяет их на ограничения 1.16.5, рендерит превью и собирает zip.
+
+## Вариант 256×256
+
+`variant_256x256/` лежит та же модель с текстурой 256×256 (≈7.6 px на единицу модели).
+Пути внутри такие же (`zona_item:item/furn_dresser_wood`), поэтому вариант подменяет версию 64×64 целиком:
+`variant_256x256/dist/zona_furniture_1.16.5_256x.zip`, либо JSON + PNG из `variant_256x256/resourcepack/assets/zona_item/`.
+
+Пересборка: `TEX_SIZE=256 python3 build.py`.
