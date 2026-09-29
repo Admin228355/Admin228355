@@ -126,40 +126,124 @@ def fit_cube(m, lo=(0, 0, 0), hi=(16, 16, 16)):
     m.corners = lambda: pts
 
 
-# ---------------------------------------------------------------------- pieces
+# ---------------------------------------------------------------------- smooth 2-block slopes
+# S-profile over 32 units (2 blocks) rising 16 (1 block): 22.5 deg -> 45 deg -> 22.5 deg.
+# Only 0 / 22.5 / 45 degree element rotations exist in 1.16.5, this is the smoothest profile they allow.
+_A = 16 / (2 - 2 * math.tan(math.radians(22.5)))          # length of each gentle part (~13.66)
+_B = 32 - 2 * _A                                           # steep middle part (~4.69)
+PROFILE = []                                               # (start, horizontal length, angle, start height)
+_t, _y = -16.0, 0.0
+for _len, _ang in ((_A, 22.5), (_B, 45.0), (_A, 22.5)):
+    PROFILE.append((_t, _len, _ang, _y))
+    _t += _len
+    _y += _len * math.tan(math.radians(_ang))
+
+
+def prof(t):
+    """Height of the S-profile at horizontal position t (-16 .. 16), 0 before, 16 after."""
+    t = np.asarray(t, float)
+    h = np.zeros_like(t)
+    for (t0, ln, ang, y0) in PROFILE:
+        m = (t >= t0) & (t <= t0 + ln)
+        h = np.where(m, y0 + (t - t0) * math.tan(math.radians(ang)), h)
+    return np.where(t > 16, 16.0, np.where(t < -16, 0.0, h))
+
+
+def smooth(height, mode, lo, hi, tol=0.18, seed=11, band=1.8):
+    """mode 'surf': keep only texels lying on the height surface (grass);
+    mode 'wall': vertical side, keep texels under the surface (dirt with a grass rim)."""
+    def paint(ctx):
+        X, Y, Z = world_pts(ctx)
+        h = height(X, Z)
+        if mode == "surf":
+            img = _grass(X, Y, Z, seed)
+            keep = np.abs(Y - h) < tol
+        else:
+            img = _dirt(X, Y, Z, seed)
+            jag = band * (0.6 + 0.8 * vnoise(X * 1.3, 0, Z * 1.3, seed + 21))
+            rim = Y > h - jag
+            img[rim] = _grass(X, Y, Z, seed)[rim]
+            sh = (Y > h - jag - 0.6) & ~rim
+            img[sh, :3] = (img[sh, :3] * 0.72).astype(np.uint8)
+            if ctx.dir == "down":
+                img[..., :3] = (img[..., :3] * 0.7).astype(np.uint8)
+            keep = (Y <= h + 0.05) | (ctx.dir == "down")
+        e = 0.02
+        keep &= (X >= lo[0] - e) & (X <= hi[0] + e) & (Z >= lo[1] - e) & (Z <= hi[1] + e) & (Y >= -e)
+        img[~keep, 3] = 0
+        return img
+    return paint
+
+
+def segs_z(m, name, x1, x2, paint):
+    """Profile along +z (surface rising toward south), one element per profile part."""
+    for k, (t0, ln, ang, y0) in enumerate(PROFILE):
+        L = ln / math.cos(math.radians(ang))
+        m.box(f"{name}_{k}", (x1, y0 - 0.5, t0), (x2, y0, t0 + L), paint,
+              skip=("north", "south", "west", "east", "down"), rot=("x", -ang, ((x1 + x2) / 2, y0, t0)))
+
+
+def segs_x(m, name, z1, z2, paint):
+    """Profile along +x (surface rising toward east)."""
+    for k, (t0, ln, ang, y0) in enumerate(PROFILE):
+        L = ln / math.cos(math.radians(ang))
+        m.box(f"{name}_{k}", (t0, y0 - 0.5, z1), (t0 + L, y0, z2), paint,
+              skip=("north", "south", "west", "east", "down"), rot=("z", ang, (t0, y0, (z1 + z2) / 2)))
+
+
+def wall(m, name, frm, to, face, paint):
+    m.box(name, frm, to, paint, skip=tuple(d for d in ("north", "south", "west", "east", "up", "down") if d != face))
+
+
+def fit_cube(m, lo=(0, 0, 0), hi=(16, 16, 16)):
+    pts = np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])], float)
+    m.corners = lambda: pts
+
+
 def slope(dens=4):
+    """Smooth slope, 1 block wide, 2 blocks long. Entity goes into the block right in front of the
+    1-high step (step to the SOUTH); the model runs one more block to the north."""
     m = Model("terrain_slope", dens)
-    h = lambda x, z: np.clip(z, 0, 16)
-    diamond_x(m, "ramp", 0, 16, 16, terrain(h, seed=1), skip=("up", "down", "south"))
-    m.box("back", (0, 0, 15.99), (16, 16, 16), terrain(h, seed=1), skip=("up", "down", "north", "west", "east"))
-    m.box("bottom", (0, 0, 0), (16, 0.01, 16), terrain(None, seed=1), skip=("up", "north", "south", "west", "east"))
-    fit_cube(m)
+    h = lambda x, z: prof(z) + 0 * x
+    lo, hi = (0, -16), (16, 16)
+    segs_z(m, "surface", 0, 16, smooth(h, "surf", lo, hi))
+    wall(m, "side_w", (0, 0, -16), (0.01, 16, 16), "west", smooth(h, "wall", lo, hi))
+    wall(m, "side_e", (15.99, 0, -16), (16, 16, 16), "east", smooth(h, "wall", lo, hi))
+    wall(m, "back", (0, 0, 15.99), (16, 16, 16), "south", smooth(h, "wall", lo, hi))
+    wall(m, "bottom", (0, 0, -16), (16, 0.01, 16), "down", smooth(h, "wall", lo, hi))
+    fit_cube(m, (0, 0, -16), (16, 16, 16))
     return m
 
 
 def slope_inner(dens=4):
+    """Concave corner, 2x2 blocks: the step is to the SOUTH and to the EAST.
+    Entity goes into the block touching both steps; the model covers it plus 3 blocks to the north/west."""
     m = Model("terrain_slope_inner", dens)
-    h = lambda x, z: np.clip(np.maximum(x, z), 0, 16)
-    diamond_x(m, "ramp_south", 0, 16, 16, terrain(h, seed=2), skip=("up", "down", "south"))
-    diamond_z(m, "ramp_east", 0, 16, 16, terrain(h, seed=2), skip=("east", "down"))
-    m.box("back_south", (0, 0, 15.99), (16, 16, 16), terrain(h, seed=2), skip=("up", "down", "north", "west", "east"))
-    m.box("back_east", (15.99, 0, 0), (16, 16, 16), terrain(h, seed=2), skip=("up", "down", "north", "south", "west"))
-    m.box("bottom", (0, 0, 0), (16, 0.01, 16), terrain(None, seed=2), skip=("up", "north", "south", "west", "east"))
-    fit_cube(m)
+    h = lambda x, z: np.maximum(prof(z), prof(x))
+    lo, hi = (-16, -16), (16, 16)
+    segs_z(m, "surface_s", -16, 16, smooth(h, "surf", lo, hi))
+    segs_x(m, "surface_e", -16, 16, smooth(h, "surf", lo, hi))
+    wall(m, "side_n", (-16, 0, -16), (16, 16, -15.99), "north", smooth(h, "wall", lo, hi))
+    wall(m, "side_w", (-16, 0, -16), (-15.99, 16, 16), "west", smooth(h, "wall", lo, hi))
+    wall(m, "back_s", (-16, 0, 15.99), (16, 16, 16), "south", smooth(h, "wall", lo, hi))
+    wall(m, "back_e", (15.99, 0, -16), (16, 16, 16), "east", smooth(h, "wall", lo, hi))
+    wall(m, "bottom", (-16, 0, -16), (16, 0.01, 16), "down", smooth(h, "wall", lo, hi))
+    fit_cube(m, (-16, 0, -16), (16, 16, 16))
     return m
 
 
 def slope_outer(dens=4):
-    """Convex corner: the two ramps (rising south / rising east), each cut by alpha to the part where it
-    is the lower one, so together they form the exact surface h = min(x, z) with a clean ridge."""
+    """Convex corner, 2x2 blocks: the raised ground is diagonal (SOUTH-EAST of the entity block).
+    Entity goes into the block touching that corner; the model covers it plus 3 blocks to the north/west."""
     m = Model("terrain_slope_outer", dens)
-    h = lambda x, z: np.clip(np.minimum(x, z), 0, 16)
-    diamond_x(m, "ramp_south", 0, 16, 16, terrain(h, seed=3), skip=("up", "down", "south"))
-    diamond_z(m, "ramp_east", 0, 16, 16, terrain(h, seed=3), skip=("east", "down"))
-    m.box("back_south", (0, 0, 15.99), (16, 16, 16), terrain(h, seed=3), skip=("up", "down", "north", "west", "east"))
-    m.box("back_east", (15.99, 0, 0), (16, 16, 16), terrain(h, seed=3), skip=("up", "down", "north", "south", "west"))
-    m.box("bottom", (0, 0, 0), (16, 0.01, 16), terrain(None, seed=3), skip=("up", "north", "south", "west", "east"))
-    fit_cube(m)
+    h = lambda x, z: np.minimum(prof(z), prof(x))
+    lo, hi = (-16, -16), (16, 16)
+    segs_z(m, "surface_s", -16, 16, smooth(h, "surf", lo, hi))
+    segs_x(m, "surface_e", -16, 16, smooth(h, "surf", lo, hi))
+    wall(m, "side_s", (-16, 0, 15.99), (16, 16, 16), "south", smooth(h, "wall", lo, hi))
+    wall(m, "side_e", (15.99, 0, -16), (16, 16, 16), "east", smooth(h, "wall", lo, hi))
+    wall(m, "bottom", (-16, 0, -16), (16, 0.01, 16), "down", smooth(h, "wall", lo, hi))
+    fit_cube(m, (-16, 0, -16), (16, 16, 16))
     return m
 
 

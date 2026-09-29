@@ -98,14 +98,14 @@ def render_scene(instances, view=(32, 208, 0), W=1800, H=1050, ssaa=2, pad=0.06)
 
 
 def terrain_layout(dressed, gb, P, ox=0.0):
-    """Ground at y=-1, a 1-high plateau with a protrusion, a 2nd tier at the back."""
+    """Ground at y=-1; a 1-high plateau (with a 2-deep protrusion on the right); a 2nd tier at the back."""
     inst = []
     B = 16.0
-    X, Z = 10, 8
+    X, Z = 10, 9
     def blk(x, y, z):
         inst.append((gb, np.array([ox + x * B, y * B, z * B]), 0))
-    plateau = {(x, z) for x in range(X) for z in range(4, Z)} | {(4, 3), (5, 3), (6, 3)}
-    tier2 = {(x, z) for x in range(X) for z in range(6, Z)}
+    plateau = {(x, z) for x in range(X) for z in range(5, Z)} | {(x, z) for x in range(6, X) for z in (3, 4)}
+    tier2 = {(x, z) for x in range(X) for z in range(7, Z)}
     for x in range(X):
         for z in range(Z):
             blk(x, -1, z)
@@ -117,25 +117,20 @@ def terrain_layout(dressed, gb, P, ox=0.0):
         return inst
     def put(name, x, y, z, rot=0):
         inst.append((P[name], np.array([ox + x * B, y * B, z * B]), rot))
+    for x in range(0, 4):
+        put("terrain_slope", x, 0, 4)              # 2-block smooth slopes in front of the main step
+    put("terrain_slope_inner", 5, 0, 4)            # concave corner (step south + east)
+    put("terrain_slope_outer", 5, 0, 2)            # convex corner of the protrusion
+    for x in range(6, X):
+        put("terrain_slope", x, 0, 2)              # slopes in front of the protrusion
     for x in range(X):
-        if (x, 3) not in plateau:
-            put("terrain_slope", x, 0, 3)
-    for x in (4, 5, 6):
-        put("terrain_slope", x, 0, 2)
-    put("terrain_slope_inner", 3, 0, 3)            # plateau to the south and east
-    put("terrain_slope_inner", 7, 0, 3, -90)       # plateau to the south and west
-    put("terrain_slope_outer", 3, 0, 2)            # protrusion to the south-east
-    put("terrain_slope_outer", 7, 0, 2, -90)       # protrusion to the south-west
-    for x in range(X):
-        put("terrain_grass_overhang", x, 2, 6)     # lip on top of the 2nd tier, hanging north
-        if x % 3 != 1:
-            put("terrain_cliff_rocks", x, 1, 5)    # rocks against the 2nd-tier wall
-    put("terrain_rocks", 1, 0, 1); put("terrain_rocks", 8, 1, 4, 90)
-    for (x, z) in ((0, 0), (2, 1), (5, 0), (8, 0), (9, 1), (1, 2)):
+        put("terrain_slope", x, 1, 6)              # the 2nd tier gets the same smooth slope
+    put("terrain_rocks", 1, 0, 1); put("terrain_rocks", 8, 1, 4, 90); put("terrain_rocks", 4, 2, 8)
+    for (x, z) in ((0, 0), (3, 0), (6, 0), (9, 0), (2, 1)):
         put("terrain_grass_tuft", x, 0, z)
-    for (x, z) in ((1, 5), (4, 4), (6, 5), (9, 4)):
+    for (x, z) in ((1, 4), (4, 7), (6, 8), (9, 7), (7, 3)):
         put("terrain_grass_tuft", x, 1, z)
-    put("terrain_mound", 4, 0, 0); put("terrain_mound", 2, 1, 4)
+    put("terrain_mound", 8, 0, 0); put("terrain_mound", 2, 2, 8)
     return inst
 
 
@@ -156,7 +151,7 @@ def main():
     except OSError:
         font = ImageFont.load_default()
     d.text((30, 20), "ДО: обычные блоки", fill=(200, 196, 180), font=font)
-    d.text((W + 40, 20), "ПОСЛЕ: склоны, трава, камни", fill=(200, 196, 180), font=font)
+    d.text((W + 40, 20), "ПОСЛЕ: плавные склоны, трава, камни", fill=(200, 196, 180), font=font)
     out.save(os.path.join(OUT, "showcase.png"))
     dressed.save(os.path.join(OUT, "showcase_after.png"))
     print("saved", os.path.join(OUT, "showcase.png"))
