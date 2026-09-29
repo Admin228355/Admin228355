@@ -19,6 +19,7 @@ PACK = os.path.join(ROOT, "resourcepack")
 PREV = os.path.join(ROOT, "previews")
 DIST = os.path.join(ROOT, "dist")
 PACK_NAME = "zona_furniture_1.16.5"
+TEX_SIZE = 64  # every texture is exactly 64x64
 
 
 def write_pack_meta(icon=None):
@@ -52,7 +53,7 @@ def write_overrides():
 def build_one(name):
     fn, cmd, title = MODELS[name]
     m = fn()
-    m.build()
+    m.build(size=TEX_SIZE)
     m.auto_display()
     m.write(PACK)
     os.makedirs(PREV, exist_ok=True)
@@ -67,7 +68,7 @@ def build_one(name):
     sh.save(os.path.join(PREV, f"{name}.png"))
     views[0].save(os.path.join(PREV, f"{name}_gui.png"))
     slot_preview(m).save(os.path.join(PREV, f"{name}_slot.png"))
-    print(f"{name}: {len(m.elements)} elements, texture {m.S}x{m.S}, CMD {cmd} ({title})")
+    print(f"{name}: {len(m.elements)} elements, texture {m.S}x{m.S} ({m.dens} px/unit), CMD {cmd} ({title})")
     return m, views[0]
 
 

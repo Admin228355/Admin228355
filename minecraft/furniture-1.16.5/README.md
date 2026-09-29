@@ -24,7 +24,7 @@ resourcepack/
   pack.png
   assets/minecraft/models/item/paper.json         overrides по custom_model_data
   assets/zona_item/models/item/<model>.json       модель (Java Block/Item)
-  assets/zona_item/textures/item/<model>.png      текстура 256x256
+  assets/zona_item/textures/item/<model>.png      текстура 64x64
 dist/zona_furniture_1.16.5.zip                    готовый к установке пак
 previews/                                         рендеры (иконка в слоте, ракурсы)
 generator/                                        исходник генератора моделей и текстур

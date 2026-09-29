@@ -103,7 +103,7 @@ def dresser_wood(dens=4):
                     [gap_shadow(rects, -0.4, dist=1), outline(-0.14), grime(2, -0.15)])
     back = Surface(Flat(DARK_WOOD, base=0.5, mottle=0.1, fine=0.06, scale=0.2), [outline(-0.15)])
     m.box("carcass", (0.25, 1.5, 5.5), (15.75, 8.5, 15.25), side, skip=("up", "down"),
-          over={"north": front, "south": back})
+          over={"north": front, "south": back}, share={"south": "dark"})
 
     top_w = Wood(DUSTY_TOP, grain="x", base=0.48, ring_amt=0.14, streak_amt=0.13, var_amt=0.2)
     top_up = Surface(top_w, [scratches(7, 0.07, (0.8, 2.5), seed=4), edge_wear(0.2, density=0.6, seed=8),
@@ -111,7 +111,7 @@ def dresser_wood(dens=4):
     top_edge = Surface(Wood(OLD_WOOD, grain="x", base=0.52), [bevel(1, hi=0.24, lo=-0.3, sides=False),
                                                                 edge_wear(0.22, density=0.6, seed=11)])
     m.box("top", (0, 8.5, 5.0), (16, 9.25, 15.5), top_edge,
-          over={"up": top_up, "down": Surface(Wood(OLD_WOOD, grain="x", base=0.2))})
+          over={"up": top_up}, share={"down": "dark"})
 
     plinth = Surface(Wood(DARK_WOOD, grain="x", base=0.5), [bevel(1, hi=0.18, lo=-0.2, sides=False),
                                                             grime(1.2, -0.15), scratches(4, 0.18, seed=6)])

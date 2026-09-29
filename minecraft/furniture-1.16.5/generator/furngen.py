@@ -85,9 +85,9 @@ class Model:
         return el
 
     # ------------------------------------------------------------------ atlas
-    def _pack(self, rects, gutter=1):
+    def _pack(self, rects, gutter=1, sizes=(32, 64, 128, 256, 512, 1024, 2048)):
         order = sorted(rects, key=lambda r: (-r["ph"], -r["pw"]))
-        for S in (32, 64, 128, 256, 512, 1024, 2048):
+        for S in sizes:
             x = y = shelf = 0
             ok = True
             for r in order:
@@ -106,8 +106,26 @@ class Model:
                 return S
         raise RuntimeError("atlas too large")
 
-    def build(self):
+    def build(self, size=None):
+        """size=None: smallest atlas at self.dens; size=64 etc.: highest density that fits that atlas."""
+        if size is None:
+            return self._build_at(None)
+        base = self.dens
+        d = base
+        while d >= 0.5:
+            self.dens = d
+            try:
+                return self._build_at((size,))
+            except RuntimeError:
+                d = round(d - 0.125, 3)
+        self.dens = base
+        raise RuntimeError(f"{self.name}: does not fit into {size}x{size}")
+
+    def _build_at(self, sizes):
         rects, by_share = [], {}
+        for el in self.elements:
+            for f in el.faces.values():
+                f.pop("rect", None)
         for el in self.elements:
             for d, f in el.faces.items():
                 p00, p10, p01 = (np.array(p, float) for p in face_corners(el.frm, el.to, d))
@@ -124,7 +142,7 @@ class Model:
                 f["rect"] = r
                 if key:
                     by_share[key] = r
-        S = self._pack(rects)
+        S = self._pack(rects, sizes=sizes) if sizes else self._pack(rects)
         img = np.zeros((S, S, 4), np.uint8)
         occ = np.zeros((S, S), bool)
         for r in rects:
