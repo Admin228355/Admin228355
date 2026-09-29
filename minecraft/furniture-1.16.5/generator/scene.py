@@ -125,12 +125,10 @@ def terrain_layout(dressed, gb, P, ox=0.0):
         put("terrain_slope", x, 0, 2)              # slopes in front of the protrusion
     for x in range(X):
         put("terrain_slope", x, 1, 6)              # the 2nd tier gets the same smooth slope
-    put("terrain_rocks", 1, 0, 1); put("terrain_rocks", 8, 1, 4, 90); put("terrain_rocks", 4, 2, 8)
     for (x, z) in ((0, 0), (3, 0), (6, 0), (9, 0), (2, 1)):
         put("terrain_grass_tuft", x, 0, z)
     for (x, z) in ((1, 4), (4, 7), (6, 8), (9, 7), (7, 3)):
         put("terrain_grass_tuft", x, 1, z)
-    put("terrain_mound", 8, 0, 0); put("terrain_mound", 2, 2, 8)
     return inst
 
 
@@ -151,7 +149,7 @@ def main():
     except OSError:
         font = ImageFont.load_default()
     d.text((30, 20), "ДО: обычные блоки", fill=(200, 196, 180), font=font)
-    d.text((W + 40, 20), "ПОСЛЕ: плавные склоны, трава, камни", fill=(200, 196, 180), font=font)
+    d.text((W + 40, 20), "ПОСЛЕ: плавные склоны", fill=(200, 196, 180), font=font)
     out.save(os.path.join(OUT, "showcase.png"))
     dressed.save(os.path.join(OUT, "showcase_after.png"))
     print("saved", os.path.join(OUT, "showcase.png"))

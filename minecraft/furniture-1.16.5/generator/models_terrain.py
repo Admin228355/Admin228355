@@ -10,7 +10,7 @@ import math
 import numpy as np
 
 from furngen import AXIS_OF, NORMAL, Model, axis_rot
-from textures import fbm, quantize, ramp, vnoise
+from textures import fbm, quantize, ramp, smoothstep, vnoise
 
 GRASS = ramp((30, 36, 16), (50, 58, 26), (72, 80, 36), (96, 100, 50), (124, 124, 70), n=8)
 DRY = ramp((52, 46, 24), (78, 70, 38), (104, 94, 56), (132, 120, 78), n=6)
@@ -38,15 +38,77 @@ def world_normal(ctx):
     return n
 
 
+GRASS_LUSH = ramp((18, 26, 14), (32, 44, 20), (50, 64, 28), (70, 84, 38), (92, 104, 50), (118, 126, 66), n=10)
+GRASS_DRY = ramp((34, 32, 16), (58, 54, 26), (86, 78, 40), (116, 104, 58), (146, 130, 80), (170, 154, 102), n=10)
+
+
+_TILE = {}
+
+
+def _periodic_field(n, freqs, rng, amp_decay=0.6):
+    """Smooth field on an n x n torus (sum of integer-frequency waves -> tiles seamlessly)."""
+    yy, xx = np.mgrid[0:n, 0:n] / n
+    f = np.zeros((n, n))
+    for k in range(1, freqs + 1):
+        for _ in range(3):
+            fx, fy = rng.randint(-k, k + 1, 2)
+            if fx == 0 and fy == 0:
+                continue
+            f += amp_decay ** k * np.cos(2 * np.pi * (fx * xx + fy * yy) + rng.uniform(0, 2 * np.pi))
+    f -= f.min()
+    return f / max(f.max(), 1e-9)
+
+
+def grass_tile(seed=11, ppu=8):
+    """One block (16x16 units) of meadow, painted blade by blade, tiling seamlessly."""
+    key = (seed, ppu)
+    if key in _TILE:
+        return _TILE[key]
+    n = 16 * ppu
+    rng = np.random.RandomState(seed)
+    dry = _periodic_field(n, 4, rng, 0.8)
+    tone = _periodic_field(n, 5, rng, 0.75)
+    lush = np.array(GRASS_LUSH, float)
+    dryp = np.array(GRASS_DRY, float)
+    # dark, slightly earthy undergrowth
+    base_i = np.clip(1.6 + 0.8 * tone, 0, 9)
+    img = lush[base_i.astype(int)] * (1 - 0.5 * dry[..., None]) + dryp[np.clip(base_i.astype(int) - 1, 0, 9)] * (0.5 * dry[..., None])
+    wind = rng.uniform(0, 2 * np.pi)
+    count = int(n * n * 0.42)
+    order = np.argsort(rng.rand(count))
+    xs = rng.uniform(0, n, count)
+    ys = rng.uniform(0, n, count)
+    for i in order:
+        x0, y0 = xs[i], ys[i]
+        L = rng.uniform(0.45, 1.25) * ppu
+        ang = wind + rng.normal(0, 0.35)
+        d = dry[int(y0) % n, int(x0) % n]
+        t = tone[int(y0) % n, int(x0) % n]
+        top = np.clip(5.2 + 1.6 * t + rng.normal(0, 1.3), 2, 9)
+        pal = dryp if rng.rand() < 0.18 + d * 0.3 else lush
+        steps = int(L) + 1
+        for k in range(steps):
+            f = k / max(steps - 1, 1)
+            xi = int(x0 + np.cos(ang) * k) % n
+            yi = int(y0 + np.sin(ang) * k) % n
+            idx = int(np.clip(top * (0.35 + 0.65 * f), 0, 9))
+            img[yi, xi] = pal[idx]
+    seeds = rng.rand(n, n) > 0.9985
+    img[seeds] = (178, 168, 130)
+    tile = img.astype(np.uint8)
+    _TILE[key] = tile
+    return tile
+
+
 def _grass(X, Y, Z, seed):
-    g = fbm(X * 0.5, Y * 0.5, Z * 0.5, seed, 3)
-    f = vnoise(X * 3.3, Y * 3.3, Z * 3.3, seed + 1)
-    img = quantize(np.clip(0.42 + 0.45 * (g - 0.5) + 0.35 * (f - 0.5), 0, 1), GRASS)
-    dry = (fbm(X * 0.25, Y * 0.25, Z * 0.25, seed + 7, 2) > 0.62) & (f > 0.45)
-    img[dry] = quantize(np.clip(0.3 + 0.5 * f[dry], 0, 1), DRY)
-    bare = fbm(X * 0.35, Y * 0.35, Z * 0.35, seed + 9, 2) < 0.3
-    img[bare] = quantize(np.clip(0.35 + 0.4 * (f[bare] - 0.5), 0, 1), DIRT)
-    return img
+    """Samples the blade-painted tile in world X/Z (+ a little of Y so slopes don't smear)."""
+    ppu = 8
+    tile = grass_tile(11, ppu)
+    n = tile.shape[0]
+    u = np.floor(X * ppu).astype(int) % n
+    w = np.floor((Z + 0.35 * Y) * ppu).astype(int) % n
+    rgb = tile[w, u]
+    return np.concatenate([rgb, np.full(rgb.shape[:-1] + (1,), 255, np.uint8)], -1)
 
 
 def _dirt(X, Y, Z, seed):
