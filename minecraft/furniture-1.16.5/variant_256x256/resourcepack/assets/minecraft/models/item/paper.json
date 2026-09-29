@@ -2,6 +2,13 @@
 	"parent": "minecraft:item/generated",
 	"textures": {"layer0": "minecraft:item/paper"},
 	"overrides": [
-		{"predicate": {"custom_model_data": 9201}, "model": "zona_item:item/furn_dresser_wood"}
+		{"predicate": {"custom_model_data": 9201}, "model": "zona_item:item/furn_dresser_wood"},
+		{"predicate": {"custom_model_data": 9202}, "model": "zona_item:item/furn_wardrobe_big"},
+		{"predicate": {"custom_model_data": 9203}, "model": "zona_item:item/furn_fridge_medium"},
+		{"predicate": {"custom_model_data": 9204}, "model": "zona_item:item/furn_wardrobe_old"},
+		{"predicate": {"custom_model_data": 9205}, "model": "zona_item:item/furn_cabinet"},
+		{"predicate": {"custom_model_data": 9206}, "model": "zona_item:item/furn_crate_army_wood"},
+		{"predicate": {"custom_model_data": 9207}, "model": "zona_item:item/furn_crate_army_big"},
+		{"predicate": {"custom_model_data": 9208}, "model": "zona_item:item/furn_crate_army_small"}
 	]
 }

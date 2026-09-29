@@ -297,3 +297,181 @@ def solid(rgb, alpha=255):
         img[..., 3] = alpha
         return img
     return f
+
+
+# ---------------------------------------------------------------------- world-space helpers for decals
+def hcoord(ctx):
+    """Horizontal world coordinate across a face (x on north/south/up/down, z on east/west)."""
+    return ctx.Z if ctx.axis == "x" else ctx.X
+
+
+def vcoord(ctx):
+    return ctx.Z if ctx.axis == "y" else ctx.Y
+
+
+def region(ctx, h1, v1, h2, v2):
+    H, V = hcoord(ctx), vcoord(ctx)
+    return (H >= min(h1, h2)) & (H <= max(h1, h2)) & (V >= min(v1, v2)) & (V <= max(v1, v2))
+
+
+def wmod(fn, dirs=("north",)):
+    """Only apply modifier fn on the given face directions."""
+    def f(ctx, s):
+        return fn(ctx, s) if ctx.dir in dirs else s
+    return f
+
+
+def perforation(rects, amount=-0.55, pitch=2, dirs=("north",)):
+    """Grid of punched holes (every `pitch` texels) inside world-space rects (h1, v1, h2, v2)."""
+    def f(ctx, s):
+        if ctx.dir not in dirs:
+            return s
+        s = s.copy()
+        hole = (ctx.ii % pitch == 0) & (ctx.jj % pitch == 0)
+        for r in rects:
+            m = region(ctx, *r)
+            s[m & hole] += amount
+            s[m & ~hole] += 0.04
+        return s
+    return f
+
+
+def louvers(rects, n, dark=-0.5, light=0.22, dirs=("north",)):
+    """n horizontal vent slots in each rect: dark slit with a lit lip under it."""
+    def f(ctx, s):
+        if ctx.dir not in dirs:
+            return s
+        s = s.copy()
+        V = vcoord(ctx)
+        px = 1.0 / ctx.dens
+        for (h1, v1, h2, v2) in rects:
+            m = region(ctx, h1, v1, h2, v2)
+            nn = max(1, min(n, int((v2 - v1) * ctx.dens / 2)))  # keep >= 1 lit texel between slits
+            step = (v2 - v1) / nn
+            for k in range(nn):
+                y = v2 - (k + 0.5) * step
+                s[m & (np.abs(V - y) < px * 0.55)] += dark
+                s[m & (np.abs(V - (y - px)) < px * 0.55)] += light
+        return s
+    return f
+
+
+def lines(h=(), v=(), amount=-0.35, lit=0.0, dirs=("north",), within=None):
+    """1-texel seams at world positions: h = horizontal-coordinate positions (vertical lines),
+    v = vertical positions (horizontal lines). `lit` brightens the texel next to it."""
+    def f(ctx, s):
+        if ctx.dir not in dirs:
+            return s
+        s = s.copy()
+        H, V = hcoord(ctx), vcoord(ctx)
+        px = 1.0 / ctx.dens
+        lim = region(ctx, *within) if within else np.ones_like(s, bool)
+        for x in h:
+            s[lim & (np.abs(H - x) < px * 0.55)] += amount
+            if lit:
+                s[lim & (np.abs(H - (x + px)) < px * 0.55)] += lit
+        for y in v:
+            s[lim & (np.abs(V - y) < px * 0.55)] += amount
+            if lit:
+                s[lim & (np.abs(V - (y - px)) < px * 0.55)] += lit
+        return s
+    return f
+
+
+def frame_rect(rects, dark=-0.3, light=0.14, dirs=("north",)):
+    """Pressed/recessed rectangle outline (dark top-left, light bottom-right)."""
+    def f(ctx, s):
+        if ctx.dir not in dirs:
+            return s
+        s = s.copy()
+        H, V = hcoord(ctx), vcoord(ctx)
+        px = 1.0 / ctx.dens
+        for (h1, v1, h2, v2) in rects:
+            inside = region(ctx, h1, v1, h2, v2)
+            top = inside & (np.abs(V - v2) < px * 0.55)
+            bot = inside & (np.abs(V - v1) < px * 0.55)
+            l1 = inside & (np.abs(H - h1) < px * 0.55)
+            l2 = inside & (np.abs(H - h2) < px * 0.55)
+            s[top | l1 | l2] += dark
+            s[bot] += light
+        return s
+    return f
+
+
+def fill(rects, amount, dirs=("north",)):
+    def f(ctx, s):
+        if ctx.dir not in dirs:
+            return s
+        s = s.copy()
+        for r in rects:
+            s[region(ctx, *r)] += amount
+        return s
+    return f
+
+
+def plank_seams(period, axis="y", offset=0.0, amount=-0.3, lit=0.1, dirs=("north", "south", "west", "east")):
+    """Board joints every `period` units along a world axis."""
+    def f(ctx, s):
+        if ctx.dir not in dirs:
+            return s
+        s = s.copy()
+        c = ctx.coord(axis)
+        px = 1.0 / ctx.dens
+        ph = (c - offset) % period
+        s[ph < px * 0.999] += amount
+        s[(ph >= px) & (ph < 2 * px * 0.999)] += lit
+        return s
+    return f
+
+
+def box_joints(ends, width, period, amount=-0.14, dirs=("north", "south", "west", "east")):
+    """Finger-joint look at crate corners: alternating darker bands near the given world ends."""
+    def f(ctx, s):
+        if ctx.dir not in dirs:
+            return s
+        s = s.copy()
+        H = hcoord(ctx)
+        band = ((ctx.Y // period) % 2) == 0
+        for e in ends:
+            m = np.abs(H - e) < width
+            s[m & band] += amount
+            s[m & ~band] -= amount * 0.3
+        return s
+    return f
+
+
+RUST = ramp((46, 22, 10), (92, 44, 18), (132, 70, 30), (164, 104, 56), n=6)
+
+
+def rust(amount=0.1, scale=0.55, seed=0, edge=0.0, bottom=0.0, palette=None):
+    """Overlay: rust / chipped paint blotches (world-space noise), more on edges and near the floor."""
+    pal = np.array(palette or RUST, np.uint8)
+
+    def f(ctx, img):
+        n = fbm(ctx.X * scale, ctx.Y * scale, ctx.Z * scale, ctx.seed + seed + 311, 3)
+        fine = vnoise(ctx.X * 2.3, ctx.Y * 2.3, ctx.Z * 2.3, ctx.seed + seed + 17)
+        score = n + 0.35 * (fine - 0.5)
+        if edge:
+            m = (ctx.ii == 0) | (ctx.jj == 0) | (ctx.ii == ctx.pw - 1) | (ctx.jj == ctx.ph - 1)
+            score = score + edge * m
+        if bottom and ctx.dir not in ("up", "down"):
+            score = score + bottom * (1 - smoothstep(0, 3, ctx.Y))
+        m = score > (1.0 - amount)
+        if not m.any():
+            return img
+        img = img.copy()
+        idx = np.clip(((score - (1 - amount)) / max(amount, 1e-3) * 2 + fine) * (len(pal) - 1) / 2, 0, len(pal) - 1)
+        img[m, :3] = pal[idx.astype(int)][m]
+        return img
+    return f
+
+
+def streaks(amount=-0.1, scale=0.6, seed=0):
+    """Vertical dirt run-downs on vertical faces."""
+    def f(ctx, s):
+        if ctx.dir in ("up", "down"):
+            return s
+        H = hcoord(ctx)
+        n = fbm(H * scale * 3, ctx.Y * 0.08, 0, ctx.seed + seed + 5, 2)
+        return s + amount * smoothstep(0.55, 0.8, n)
+    return f
