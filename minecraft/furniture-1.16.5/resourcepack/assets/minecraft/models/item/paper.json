@@ -1,0 +1,7 @@
+{
+	"parent": "minecraft:item/generated",
+	"textures": {"layer0": "minecraft:item/paper"},
+	"overrides": [
+		{"predicate": {"custom_model_data": 9201}, "model": "zona_item:item/furn_dresser_wood"}
+	]
+}
