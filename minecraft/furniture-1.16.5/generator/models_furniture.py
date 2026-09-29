@@ -4,7 +4,7 @@ import math
 import numpy as np
 
 from furngen import Model
-from textures import (PAL, Flat, Metal, Surface, Wood, add, bevel, edge_wear, fbm, gap_shadow, grime,
+from textures import (PAL, ramp, Flat, Metal, Surface, Wood, add, bevel, edge_wear, fbm, gap_shadow, grime,
                       groove, outline, quantize, ring_stain, scratches, vnoise)
 
 # ---------------------------------------------------------------------- shared painters
@@ -82,87 +82,52 @@ def photo_front(ctx):
 
 # ---------------------------------------------------------------------- 1. Деревянный комод
 
+OLD_WOOD = ramp((24, 17, 12), (46, 32, 22), (74, 52, 36), (104, 76, 54), (132, 102, 76), n=8)
+OLD_FRONT = ramp((32, 18, 11), (64, 36, 21), (100, 60, 36), (132, 88, 58), (160, 122, 92), n=8)
+DUSTY_TOP = ramp((44, 34, 28), (80, 62, 50), (116, 94, 80), (150, 130, 114), (178, 162, 146), n=8)
+DARK_WOOD = ramp((16, 12, 9), (32, 23, 16), (52, 38, 27), (74, 56, 40), n=6)
+OLD_BRASS = ramp((40, 30, 14), (86, 66, 30), (140, 112, 56), (190, 164, 96), n=6)
+
 
 def dresser_wood(dens=4):
-    """Low 4-drawer chest in warm cherry: two small drawers on top, two wide ones below,
-    nickel bail pulls, brass key escutcheons, bun feet. A lace doily and a framed photo on top."""
+    """Low, wide two-drawer chest on a plinth (as on the DayZ server): faded dirty wood,
+    dusty top, scuffed drawer fronts, one small brass pull per drawer. Nothing extra."""
     m = Model("furn_dresser_wood", dens)
+    drawers = [("drawer_upper", (0.75, 4.6), (15.25, 7.3)), ("drawer_lower", (0.75, 1.8), (15.25, 4.4))]
+    rects = [(a[0], a[1], b[0], b[1]) for _, a, b in drawers]
 
-    drawers = [
-        ("drawer_top_left", (1.0, 8.5), (7.75, 10.5)),
-        ("drawer_top_right", (8.25, 8.5), (15.0, 10.5)),
-        ("drawer_middle", (1.0, 5.5), (15.0, 8.0)),
-        ("drawer_bottom", (1.0, 2.5), (15.0, 5.0)),
-    ]
-    drawer_rects = [(a[0], a[1], b[0], b[1]) for _, a, b in drawers]
+    wear = [grime(2.5, -0.2), scratches(7, 0.16, (0.8, 3.0), seed=2), edge_wear(0.22, px=1, density=0.55, seed=5)]
+    side = Surface(Wood(OLD_WOOD, grain="y", base=0.46, ring_amt=0.18, var_amt=0.2),
+                   [outline(-0.14)] + wear)
+    front = Surface(Wood(OLD_WOOD, grain="x", base=0.4, var_amt=0.2),
+                    [gap_shadow(rects, -0.4, dist=1), outline(-0.14), grime(2, -0.15)])
+    back = Surface(Flat(DARK_WOOD, base=0.5, mottle=0.1, fine=0.06, scale=0.2), [outline(-0.15)])
+    m.box("carcass", (0.25, 1.5, 5.5), (15.75, 8.5, 15.25), side, skip=("up", "down"),
+          over={"north": front, "south": back})
 
-    # --- carcass
-    side = Surface(Wood("cherry_body", grain="y", base=0.5, ring_freq=0.5),
-                   [groove(1.0, dark=-0.22, light=0.12), outline(-0.1), grime(3, -0.12), edge_wear(0.12, seed=3)])
-    front_frame = Surface(Wood("cherry_body", grain="x", base=0.44),
-                          [gap_shadow(drawer_rects, -0.34, dist=1), outline(-0.12)])
-    back = Surface(Flat("fibreboard", base=0.42, mottle=0.12, fine=0.1, scale=0.2), [outline(-0.18), grime(3, -0.1)])
-    m.box("carcass", (0.5, 2, 5), (15.5, 11, 15.5), side, skip=("up", "down"),
-          over={"north": front_frame, "south": back})
+    top_w = Wood(DUSTY_TOP, grain="x", base=0.48, ring_amt=0.14, streak_amt=0.13, var_amt=0.2)
+    top_up = Surface(top_w, [scratches(7, 0.07, (0.8, 2.5), seed=4), edge_wear(0.2, density=0.6, seed=8),
+                             outline(-0.12)])
+    top_edge = Surface(Wood(OLD_WOOD, grain="x", base=0.52), [bevel(1, hi=0.24, lo=-0.3, sides=False),
+                                                                edge_wear(0.22, density=0.6, seed=11)])
+    m.box("top", (0, 8.5, 5.0), (16, 9.25, 15.5), top_edge,
+          over={"up": top_up, "down": Surface(Wood(OLD_WOOD, grain="x", base=0.2))})
 
-    # --- top board with a moulded front edge
-    top_wood = Wood("cherry_body", grain="x", base=0.58, ring_freq=0.45, streak_amt=0.16)
-    top_up = Surface(top_wood, [scratches(9, 0.13, seed=4), ring_stain(12.6, 12.9, 1.1, -0.14),
-                                edge_wear(0.16, seed=8), outline(-0.08)])
-    top_edge = Surface(top_wood, [bevel(1, hi=0.26, lo=-0.3, sides=False), edge_wear(0.18, seed=11)])
-    top_under = Surface(top_wood, [add(-0.3)])
-    m.box("top", (0, 11, 4.25), (16, 12, 15.75), top_edge, over={"up": top_up, "down": top_under})
+    plinth = Surface(Wood(DARK_WOOD, grain="x", base=0.5), [bevel(1, hi=0.18, lo=-0.2, sides=False),
+                                                            grime(1.2, -0.15), scratches(4, 0.18, seed=6)])
+    m.box("plinth", (0.5, 0, 5.75), (15.5, 1.5, 15.0), plinth, skip=("up", "down"))
 
-    moulding = Surface(Wood("cherry_body", grain="x", base=0.5), [bevel(1, hi=0.22, lo=-0.34, sides=False)])
-    m.box("top_moulding", (0.25, 10.6, 4.6), (15.75, 11, 15.6), moulding, skip=("up",),
-          over={"down": Surface(Wood("cherry_body", grain="x", base=0.3))})
-
-    # --- plinth and bun feet
-    dark = Wood("cherry_dark", grain="x", base=0.5, ring_amt=0.18)
-    plinth = Surface(dark, [bevel(1, hi=0.2, lo=-0.25, sides=False), grime(2, -0.1)])
-    m.box("plinth", (0.25, 1, 4.75), (15.75, 2, 15.75), plinth, over={"down": Surface(dark, [add(-0.3)])})
-    foot = Surface(Wood("cherry_dark", grain="y", base=0.42), [grime(1.2, -0.12)])
-    for n, (fx, fz) in enumerate(((1.75, 6.25), (14.25, 6.25), (1.75, 14.25), (14.25, 14.25))):
-        m.box(f"foot_{n}", (fx - 0.75, 0, fz - 0.75), (fx + 0.75, 1, fz + 0.75), foot, skip=("up", "down"))
-        m.box(f"foot_{n}_r", (fx - 0.6, 0, fz - 0.6), (fx + 0.6, 1, fz + 0.6), foot, skip=("up", "down"),
-              rot=("y", 45, (fx, 0.5, fz)))
-
-    # --- drawer fronts
-    dwood = Wood("cherry_front", grain="x", base=0.5, ring_freq=0.6, ring_amt=0.24)
-    dfront = Surface(dwood, [bevel(1, hi=0.2, lo=-0.28), groove(0.5, dark=-0.2, light=0.12),
-                             edge_wear(0.14, seed=21)])
-    dedge = Surface(dwood, [add(-0.06)])
+    dwood = Wood(OLD_FRONT, grain="x", base=0.48, ring_amt=0.18, streak_amt=0.14, var_amt=0.22)
+    dfront = Surface(dwood, [bevel(1, hi=0.2, lo=-0.3), scratches(6, 0.12, (0.6, 2.2), seed=21),
+                             edge_wear(0.26, density=0.6, seed=22), grime(2, -0.12)])
     for name, (x1, y1), (x2, y2) in drawers:
-        m.box(name, (x1, y1, 4.5), (x2, y2, 5.0), dedge, skip=("south",), over={"north": dfront})
-
-    # --- hardware
-    nickel = Surface(Metal("nickel", base=0.52), [outline(-0.18)])
-    nickel_bar = Surface(Metal("nickel", base=0.62, tarnish=0.18))
-    rosette = Surface(Metal("nickel", base=0.4, tarnish=0.26), [outline(-0.22)])
-    brass = Surface(Metal("brass", base=0.55, tarnish=0.2), [outline(-0.2), bevel(1, 0.1, -0.12)], [keyhole])
-    for name, (x1, y1), (x2, y2) in drawers[2:]:
+        m.box(name, (x1, y1, 5.25), (x2, y2, 5.5), Surface(dwood, [add(-0.12)]), skip=("south",),
+              over={"north": dfront})
         my = (y1 + y2) / 2
-        for k, cx in enumerate((4.25, 11.75)):
-            for side_, px in (("a", cx - 1.1), ("b", cx + 1.1)):
-                m.box(f"{name}_rosette_{k}{side_}", (px - 0.4, my - 0.4, 4.35), (px + 0.4, my + 0.4, 4.5), rosette,
-                      skip=("south",))
-                m.box(f"{name}_post_{k}{side_}", (px - 0.2, my - 0.2, 3.85), (px + 0.2, my + 0.2, 4.35), nickel,
-                      skip=("south",))
-            m.box(f"{name}_pull_{k}", (cx - 1.5, my - 0.2, 3.45), (cx + 1.5, my + 0.2, 3.85), nickel_bar)
-        m.box(f"{name}_keyhole", (7.25, my - 0.875, 4.4), (8.75, my + 0.875, 4.5), brass, skip=("south",))
-    for name, (x1, y1), (x2, y2) in drawers[:2]:
-        cx, my = (x1 + x2) / 2, (y1 + y2) / 2
-        m.box(f"{name}_knob", (cx - 0.4, my - 0.4, 3.9), (cx + 0.4, my + 0.4, 4.5), nickel, skip=("south",))
-        m.box(f"{name}_knob_r", (cx - 0.4, my - 0.4, 3.95), (cx + 0.4, my + 0.4, 4.45), nickel, skip=("south",),
-              rot=("z", 45, (cx, my, 4.2)))
-
-    # --- decor on top
-    m.box("doily", (1.75, 12, 6.25), (9.25, 12.08, 13.75), lace_doily(5.5, 10.0, 3.75),
-          skip=("north", "south", "west", "east", "down"))
-    frame_side = Surface(Wood("frame_wood", grain="y", base=0.45))
-    cardboard = Surface(Flat("cardboard", base=0.5, mottle=0.2), [outline(-0.2)])
-    m.box("photo_frame", (10.5, 12, 9.0), (14.0, 16.0, 9.5), frame_side, skip=("down",),
-          over={"north": photo_front, "south": cardboard}, rot=("x", 22.5, (12.25, 12, 9.0)))
+        brass = Surface(Metal(OLD_BRASS, base=0.5, tarnish=0.3), [outline(-0.2)])
+        m.box(f"{name}_pull", (6.75, my - 0.2, 4.85), (9.25, my + 0.2, 5.1), brass)
+        for k, px in enumerate((6.9, 8.85)):
+            m.box(f"{name}_post_{k}", (px, my - 0.15, 5.1), (px + 0.25, my + 0.15, 5.25), brass, skip=("south",))
     return m
 
 
