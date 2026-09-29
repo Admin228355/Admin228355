@@ -10,11 +10,17 @@ import zipfile
 
 from PIL import Image
 
-from models_furniture import MODELS
+SET = os.environ.get("SET", "furniture")
+if SET == "terrain":
+    from models_terrain import MODELS
+else:
+    from models_furniture import MODELS
 from render import render, sheet, slot_preview
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+if SET == "terrain":  # separate pack next to the furniture one
+    ROOT = os.path.join(os.path.dirname(ROOT), "terrain-1.16.5")
 PACK = os.path.join(ROOT, "resourcepack")
 PREV = os.path.join(ROOT, "previews")
 DIST = os.path.join(ROOT, "dist")
@@ -24,7 +30,7 @@ if TEX_SIZE != 64:  # extra resolutions go to their own folder, same asset paths
     PACK = os.path.join(ROOT, "resourcepack")
     PREV = os.path.join(ROOT, "previews")
     DIST = os.path.join(ROOT, "dist")
-PACK_NAME = f"zona_furniture_1.16.5_{TEX_SIZE}x"
+PACK_NAME = f"zona_{SET}_1.16.5_{TEX_SIZE}x"
 
 
 def write_pack_meta(icon=None):
@@ -58,7 +64,7 @@ def write_overrides():
 def build_one(name):
     fn, cmd, title = MODELS[name]
     m = fn()
-    m.dens = TEX_SIZE / 16  # start dense, build() steps down until the model fits the atlas
+    m.dens = min(TEX_SIZE / 16, 4.0) if SET == "terrain" else TEX_SIZE / 16  # start dense, build() steps down until the model fits the atlas
     m.build(size=TEX_SIZE)
     m.auto_display()
     m.write(PACK)

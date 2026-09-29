@@ -1,0 +1,15 @@
+{
+	"parent": "minecraft:item/generated",
+	"textures": {"layer0": "minecraft:item/paper"},
+	"overrides": [
+		{"predicate": {"custom_model_data": 9301}, "model": "zona_item:item/terrain_slope"},
+		{"predicate": {"custom_model_data": 9302}, "model": "zona_item:item/terrain_slope_inner"},
+		{"predicate": {"custom_model_data": 9303}, "model": "zona_item:item/terrain_slope_outer"},
+		{"predicate": {"custom_model_data": 9304}, "model": "zona_item:item/terrain_grass_overhang"},
+		{"predicate": {"custom_model_data": 9305}, "model": "zona_item:item/terrain_grass_overhang_corner"},
+		{"predicate": {"custom_model_data": 9306}, "model": "zona_item:item/terrain_cliff_rocks"},
+		{"predicate": {"custom_model_data": 9307}, "model": "zona_item:item/terrain_rocks"},
+		{"predicate": {"custom_model_data": 9308}, "model": "zona_item:item/terrain_grass_tuft"},
+		{"predicate": {"custom_model_data": 9309}, "model": "zona_item:item/terrain_mound"}
+	]
+}
