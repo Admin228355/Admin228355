@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Генератор Blockbench-модели вертолёта «Ми-8» (зона отчуждения).
+"""Генератор Blockbench-модели вертолёта «Ми-8» (зона отчуждения), версия 2 — сглаженная.
+
+Корпус, мотогондола, хвостовая балка, баки, выхлопные трубы, колёса и киль
+собираются «лофтом»: по набору сечений (суперэллипсов) строится обшивка из
+тонких панелей, каждая панель — куб, повёрнутый по всем трём осям.
+Поэтому модель получается гладкой, а не «кубической».
 
 Создаёт:
-  mi8_helicopter.bbmodel  — проект Blockbench (Generic Model) с встроенной
-                            текстурой 64x64, группами (костями) и анимациями;
-  mi8_texture.png         — та же текстура 64x64 отдельным файлом.
+  mi8_helicopter.bbmodel  — проект Blockbench (Generic Model), текстура 256x256
+                            встроена, группы (кости) и анимации;
+  mi8_texture.png         — та же текстура отдельным файлом.
 
 Зависимостей нет (только стандартная библиотека Python 3).
 Запуск:  python3 generate.py
@@ -20,7 +25,7 @@ import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RNG = random.Random(1986)
-TEX = 64
+TEX = 256
 
 
 def new_uuid():
@@ -28,9 +33,41 @@ def new_uuid():
 
 
 # ---------------------------------------------------------------------------
-# Текстура 64x64
+# Векторы
 # ---------------------------------------------------------------------------
-img = [[(0, 0, 0, 255) for _ in range(TEX)] for _ in range(TEX)]
+def add(a, b): return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+def sub(a, b): return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+def mul(a, s): return (a[0] * s, a[1] * s, a[2] * s)
+def dot(a, b): return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+def cross(a, b): return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+def length(a): return math.sqrt(dot(a, a))
+
+
+def norm(a):
+    n = length(a)
+    return mul(a, 1 / n) if n > 1e-9 else (0, 0, 0)
+
+
+def lerp(a, b, t): return a + (b - a) * t
+
+
+def euler_zyx(X, Y, Z):
+    """Матрица со столбцами X,Y,Z -> углы Эйлера (градусы) в порядке ZYX (как в Blockbench)."""
+    m31, m32, m33, m21, m11 = X[2], Y[2], Z[2], X[1], X[0]
+    y = math.asin(max(-1, min(1, -m31)))
+    if abs(m31) < 0.9999999:
+        x = math.atan2(m32, m33)
+        z = math.atan2(m21, m11)
+    else:
+        x = 0
+        z = math.atan2(-Y[0], Y[1])
+    return [round(math.degrees(v), 4) for v in (x, y, z)]
+
+
+# ---------------------------------------------------------------------------
+# Текстура 256x256
+# ---------------------------------------------------------------------------
+img = [[(0, 0, 0, 0) for _ in range(TEX)] for _ in range(TEX)]
 
 
 def clamp(v):
@@ -39,134 +76,158 @@ def clamp(v):
 
 def put(x, y, c, a=255):
     if 0 <= x < TEX and 0 <= y < TEX:
-        img[y][x] = (clamp(c[0]), clamp(c[1]), clamp(c[2]), a)
+        img[y][x] = (clamp(c[0]), clamp(c[1]), clamp(c[2]), clamp(a))
 
 
-def shade(c, k):
-    return (c[0] * k, c[1] * k, c[2] * k)
+def get(x, y):
+    return img[y][x]
 
 
-def mix(a, b, t):
-    return tuple(a[i] + (b[i] - a[i]) * t for i in range(3))
+def shade(c, k): return (c[0] * k, c[1] * k, c[2] * k)
+def mix(a, b, t): return tuple(a[i] + (b[i] - a[i]) * t for i in range(3))
 
 
-def noisy(c, amp, r=RNG):
-    n = r.uniform(-amp, amp)
-    return (c[0] + n, c[1] + n * 1.05, c[2] + n * 0.8)
+def noisy(c, amp):
+    n = RNG.uniform(-amp, amp)
+    return (c[0] + n, c[1] + n * 1.04, c[2] + n * 0.85)
+
+
+_P = list(range(512))
+random.Random(7).shuffle(_P)
+
+
+def _h(ix, iy, s):
+    return ((ix * 374761393 + iy * 668265263 + s * 982451653) & 0xFFFFFFFF) / 0xFFFFFFFF
+
+
+def vnoise(x, y, s=0):
+    ix, iy = math.floor(x), math.floor(y)
+    fx, fy = x - ix, y - iy
+    fx, fy = fx * fx * (3 - 2 * fx), fy * fy * (3 - 2 * fy)
+    a = lerp(_h(ix, iy, s), _h(ix + 1, iy, s), fx)
+    b = lerp(_h(ix, iy + 1, s), _h(ix + 1, iy + 1, s), fx)
+    return lerp(a, b, fy)
+
+
+def fbm(x, y, s=0, oct=4):
+    v, amp, tot = 0, 1, 0
+    for o in range(oct):
+        v += vnoise(x, y, s + o * 17) * amp
+        tot += amp
+        x, y, amp = x * 2.03, y * 2.03, amp * 0.5
+    return v / tot
 
 
 def fill(x0, y0, w, h, fn):
     for y in range(y0, y0 + h):
         for x in range(x0, x0 + w):
-            res = fn(x - x0, y - y0)
-            if len(res) == 4:
-                put(x, y, res[:3], res[3])
-            else:
-                put(x, y, res)
+            r = fn(x - x0, y - y0)
+            put(x, y, r[:3], r[3] if len(r) == 4 else 255)
 
 
-OLIVE = (76, 84, 50)
-OLIVE_D = (58, 64, 40)
-RUST = (112, 64, 34)
-RUST_L = (150, 88, 42)
-DARKM = (52, 54, 52)
-GLASS = (46, 60, 66)
-RED = (160, 38, 32)
-WHITE = (200, 198, 184)
+OLIVE = (82, 90, 54)
+OLIVE_D = (60, 67, 40)
+OLIVE_B = (92, 86, 56)
+RUST = (116, 66, 34)
+RUST_L = (152, 90, 44)
+DARKM = (54, 56, 54)
+GLASS = (52, 70, 78)
+RED = (165, 36, 30)
+WHITE = (206, 204, 190)
 
 
-def hull(base, rust_p=0.07, lines=True, seed=0):
-    r = random.Random(seed)
-    spots = set()
-    for _ in range(int(256 * rust_p)):
-        sx, sy = r.randrange(16), r.randrange(16)
-        spots.add((sx, sy))
-        if r.random() < 0.5:
-            spots.add((sx, min(15, sy + 1)))  # потёки ржавчины вниз
-
-    def f(x, y):
-        c = noisy(base, 7, r)
-        if lines and (x == 7 or y == 10):
-            c = shade(c, 0.78)  # швы панелей
-        if lines and (x in (6, 8)) and y % 3 == 1:
-            c = shade(c, 1.2)  # заклёпки
-        if (x, y) in spots:
-            c = mix(c, RUST if r.random() < 0.6 else RUST_L, 0.8)
-        return c
-    return f
-
-
-# (0,0) корпус A, (16,0) корпус B (камуфляж), (32,0) ржавчина, (48,0) тёмный металл
-fill(0, 0, 16, 16, hull(OLIVE, 0.06, True, 1))
-_rb = random.Random(2)
-_blob = [(_rb.randrange(16), _rb.randrange(16), _rb.uniform(2, 4.5)) for _ in range(4)]
-
-
-def camo(x, y):
-    c = noisy(OLIVE, 6, _rb)
-    for bx, by, br in _blob:
-        if (x - bx) ** 2 + (y - by) ** 2 < br * br:
-            c = noisy(OLIVE_D, 6, _rb)
-    if _rb.random() < 0.05:
-        c = mix(c, RUST, 0.7)
-    if y == 5:
-        c = shade(c, 0.8)
+def camo_color(s, t, seed=0):
+    """Камуфляж + износ по координатам s,t (в «мировых» единицах)."""
+    n = fbm(s * 0.06, t * 0.06, seed)
+    c = OLIVE if n < 0.53 else OLIVE_D
+    if 0.47 < n < 0.5:
+        c = OLIVE_B
+    c = noisy(c, 5)
+    g = fbm(s * 0.35, t * 0.35, seed + 5)
+    c = shade(c, 0.9 + g * 0.2)
+    r = fbm(s * 0.22, t * 0.22, seed + 9)
+    if r > 0.7:
+        c = mix(c, RUST if r < 0.75 else RUST_L, min(0.85, (r - 0.7) * 8))
     return c
 
 
-fill(16, 0, 16, 16, camo)
-fill(32, 0, 16, 16, lambda x, y: noisy(mix(RUST, RUST_L, RNG.random() * 0.6), 12)
-     if RNG.random() > 0.12 else noisy(OLIVE_D, 6))
-fill(48, 0, 16, 16, lambda x, y: shade(noisy(DARKM, 6), 0.8 if (x % 8 == 0 or y % 8 == 0) else 1))
+# --- тайлы материалов (нижняя половина атласа) ---
+MAT = {}  # имя: (u, v, w, h, растягивать_целиком)
 
 
-# (0,16) стекло кабины 16x16 (полупрозрачное, рама, трещины)
-def glass(x, y):
-    if x in (0, 15) or y in (0, 15) or x == 8:
-        return noisy(OLIVE_D, 5) + (255,)
-    c = noisy(GLASS, 5)
-    if 2 <= (x + y) - 8 <= 3:
-        c = mix(c, (150, 170, 175), 0.45)  # блик
-    if (x, y) in {(3, 4), (4, 5), (5, 5), (5, 6), (6, 8), (4, 6), (11, 3), (12, 4), (12, 5), (13, 5)}:
-        return (170, 176, 170, 230)  # трещины
-    if RNG.random() < 0.04:
-        return mix(c, (90, 80, 60), 0.6) + (220,)  # грязь
-    return c + (150,)
+def tile(name, u, v, w, h, whole, fn):
+    MAT[name] = (u, v, w, h, whole)
+    fill(u, v, w, h, fn)
 
 
-fill(0, 16, 16, 16, glass)
+def glass_px(x, y):
+    c = noisy((70, 92, 102), 3)
+    if 6 <= (x + y) % 23 <= 8:
+        c = mix(c, (180, 200, 206), 0.4)
+    d = fbm(x * 0.3, y * 0.3, 44)
+    a = 165
+    if d > 0.72:
+        c, a = mix(c, (96, 88, 64), 0.35), 200
+    return c + (a,)
 
 
-# (16,16) иллюминатор 8x8
-def porthole(x, y):
-    d = math.hypot(x - 3.5, y - 3.5)
-    if d < 2.4:
-        c = noisy(GLASS, 4)
-        return mix(c, (140, 160, 165), 0.5) if x - y == -1 else c
-    if d < 3.4:
-        return noisy((40, 42, 38), 4)  # резиновый уплотнитель
-    return noisy(OLIVE, 6)
+tile("glass", 0, 128, 32, 32, False, glass_px)
 
 
-fill(16, 16, 8, 8, porthole)
-
-STAR = ["...##...",
-        "...##...",
-        "########",
-        ".######.",
-        "..####..",
-        ".##..##.",
-        "##....##",
-        "........"]
-
-
-def star(x, y):
-    if STAR[y][x] == "#":
-        return mix(noisy(RED, 10), OLIVE, 0.35) if RNG.random() < 0.2 else noisy(RED, 10)
-    return noisy(OLIVE, 6)
+def porthole_px(x, y):
+    d = math.hypot(x - 7.5, y - 7.5)
+    if d > 7.6:
+        return (0, 0, 0, 0)
+    if d > 6.4:
+        return noisy((70, 76, 50), 4)
+    if d > 5.3:
+        return noisy((30, 31, 29), 3)
+    c = noisy(GLASS, 4)
+    if -2 <= x - y <= 0:
+        c = mix(c, (170, 190, 196), 0.5)
+    return c + (235,)
 
 
-fill(24, 16, 8, 8, star)
+tile("porthole", 32, 128, 16, 16, True, porthole_px)
+
+
+def star_poly(cx, cy, R, r):
+    pts = []
+    for i in range(10):
+        ang = -math.pi / 2 + i * math.pi / 5
+        rad = R if i % 2 == 0 else r
+        pts.append((cx + rad * math.cos(ang), cy + rad * math.sin(ang)))
+    return pts
+
+
+def in_poly(x, y, pts):
+    ins = False
+    j = len(pts) - 1
+    for i in range(len(pts)):
+        xi, yi = pts[i]
+        xj, yj = pts[j]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi + 1e-9) + xi:
+            ins = not ins
+        j = i
+    return ins
+
+
+_SO, _SI = star_poly(15.5, 16.5, 15.5, 6.2), star_poly(15.5, 16.5, 13.2, 5.2)
+
+
+def star_px(x, y):
+    px, py = x + 0.5, y + 0.5
+    if in_poly(px, py, _SI):
+        c = noisy(RED, 10)
+        if fbm(x * 0.4, y * 0.4, 3) > 0.7:
+            c = mix(c, OLIVE, 0.6)
+        return c
+    if in_poly(px, py, _SO):
+        return noisy(WHITE, 10) if fbm(x * 0.5, y * 0.5, 4) < 0.72 else noisy(OLIVE, 6)
+    return (0, 0, 0, 0)
+
+
+tile("star", 48, 128, 32, 32, True, star_px)
 
 DIG = {
     "3": ["11110", "00001", "00001", "01110", "00001", "00001", "11110"],
@@ -174,121 +235,80 @@ DIG = {
 }
 
 
-def number(x, y):
-    c = noisy(OLIVE, 6)
+def number_px(x, y):
     for i, d in enumerate("32"):
-        ox = 2 + i * 7
-        if 0 <= x - ox < 5 and 0 <= y - 0 < 7 and DIG[d][y][x - ox] == "1":
-            c = noisy(WHITE, 10)
-            if RNG.random() < 0.15:
-                c = mix(c, OLIVE, 0.6)  # облезшая краска
-    return c
+        gx, gy = (x - 4 - i * 13) // 2, (y - 1) // 2
+        if 0 <= gx < 5 and 0 <= gy < 7 and DIG[d][gy][gx] == "1":
+            if fbm(x * 0.5, y * 0.5, 8) > 0.72:
+                return (0, 0, 0, 0)
+            return noisy(WHITE, 8)
+    return (0, 0, 0, 0)
 
 
-fill(16, 24, 16, 8, number)
-# (32,16) шина, (40,16) лопасть, (48,16) пол, (56,16) стенка салона
-fill(32, 16, 8, 8, lambda x, y: noisy((26, 26, 25), 4) if (x + y) % 3 else noisy((40, 40, 38), 3))
-fill(40, 16, 8, 8, lambda x, y: noisy((66, 70, 58), 5))
-fill(48, 16, 8, 8, lambda x, y: noisy((70, 70, 66), 5) if (x + 2 * y) % 4 == 0 else noisy((52, 52, 50), 4))
-fill(56, 16, 8, 8, lambda x, y: mix(noisy((96, 108, 94), 6), (70, 62, 48), 0.45 if RNG.random() < 0.15 else 0))
-# (32,24) брезент сидений, (40,24) приборная панель, (48,24) ящик, (56,24) копоть
-fill(32, 24, 8, 8, lambda x, y: shade(noisy((112, 72, 46), 7), 0.75 if x in (0, 4) else 1))
-_dials = {(1, 1), (2, 1), (4, 1), (5, 1), (1, 4), (2, 4), (5, 4), (6, 4)}
+tile("number", 80, 128, 32, 16, True, number_px)
+tile("warn", 80, 144, 16, 16, True, lambda x, y: noisy((196, 44, 32), 8) if (y // 4) % 2 == 0 else noisy((218, 214, 200), 6))
+tile("red", 96, 144, 16, 16, False, lambda x, y: noisy(RED, 10))
+tile("tire", 112, 128, 32, 32, False, lambda x, y: noisy((30, 30, 29), 3) if (y % 4) else noisy((20, 20, 19), 2))
+tile("tireside", 144, 128, 32, 32, False, lambda x, y: noisy((36, 36, 34), 3))
+tile("metal", 176, 128, 32, 32, False, lambda x, y: shade(noisy(DARKM, 5), 0.85 + fbm(x * .2, y * .2, 5) * .3))
+tile("hull", 208, 128, 32, 32, False, lambda x, y: camo_color(x * 1.3, y * 1.3, 2))
+tile("rust", 240, 128, 16, 32, False, lambda x, y: noisy(mix(RUST, RUST_L, fbm(x * .4, y * .4, 6)), 10))
+tile("floor", 0, 160, 32, 32, False, lambda x, y: noisy((76, 76, 72), 4) if (x + 2 * y) % 6 == 0 else
+     mix(noisy((54, 54, 52), 4), (70, 60, 44), 0.5 if fbm(x * .3, y * .3, 9) > 0.62 else 0))
+tile("wall", 32, 160, 32, 32, False, lambda x, y: mix(noisy((100, 112, 98), 5), (72, 64, 50),
+                                                     max(0, fbm(x * .2, y * .2, 10) - 0.55) * 3))
+tile("canvas", 64, 160, 32, 32, False, lambda x, y: shade(noisy((114, 76, 48), 6), 0.8 if x % 8 == 0 else 1))
+tile("leather", 96, 160, 32, 32, False, lambda x, y: shade(noisy((60, 47, 38), 5), 0.85 if y % 6 == 0 else 1))
+_DIALS = [(5, 6, 3.5), (14, 6, 3.5), (23, 6, 3.5), (5, 16, 3), (13, 16, 3), (21, 16, 3), (28, 15, 2.2)]
 
 
-def panel(x, y):
-    if (x, y) in _dials:
-        return (190, 190, 170)
-    if (x - 1, y) in _dials:
-        return (90, 150, 90)
-    if y == 6 and x % 2 == 0:
-        return (160, 50, 40)  # тумблеры
-    return noisy((22, 24, 22), 3)
+def panel_px(x, y):
+    for cx, cy, r in _DIALS:
+        d = math.hypot(x + .5 - cx, y + .5 - cy)
+        if d < r - 0.8:
+            return (28, 30, 28) if abs((x - cx) - (y - cy) * 0.3) > 0.7 else (220, 220, 190)
+        if d < r:
+            return (150, 150, 140)
+    if y in (23, 24) and x % 3 == 1:
+        return (190, 50, 40)
+    if y in (27, 28) and x % 4 == 2:
+        return (200, 200, 190)
+    return noisy((26, 28, 26), 3)
 
 
-fill(40, 24, 8, 8, panel)
-fill(48, 24, 8, 8, lambda x, y: shade(noisy((122, 92, 56), 8), 0.7 if y in (0, 3, 7) or x in (0, 7) else 1))
-fill(56, 24, 8, 8, lambda x, y: noisy((30, 28, 26), 5))
+tile("panel", 128, 160, 32, 32, True, panel_px)
+tile("crate", 160, 160, 32, 32, True, lambda x, y: shade(noisy((126, 94, 58), 7), 0.65 if y % 8 in (0, 7) or x in (0, 1, 30, 31) else 1))
+tile("ammo", 192, 160, 32, 16, True, lambda x, y: (196, 172, 64) if y == 6 and 4 <= x <= 27 else shade(noisy((82, 88, 52), 5), 0.7 if x in (0, 31) or y in (0, 15) else 1))
+tile("soot", 192, 176, 32, 16, False, lambda x, y: noisy((30, 28, 26), 5))
+tile("grille", 224, 160, 32, 32, True, lambda x, y: (16, 16, 15) if x % 3 == 0 or y % 3 == 0 else noisy((48, 50, 46), 4))
+tile("chrome", 0, 192, 32, 16, False, lambda x, y: noisy((156, 156, 150), 8))
+tile("moss", 32, 192, 32, 32, False, lambda x, y: noisy((72, 86, 38), 10) if fbm(x * .3, y * .3, 12) > 0.45 else noisy((86, 68, 44), 8))
+tile("cable", 64, 192, 32, 16, False, lambda x, y: noisy((38, 46, 36), 5) if (x + y) % 4 else (20, 20, 20))
+tile("bladestrip", 96, 192, 128, 8, True, lambda x, y: shade(camo_color(x * 0.6, y * 2, 21), 0.8 if y in (0, 7) else (0.92 if x % 16 == 0 else 1)))
+tile("bladeedge", 96, 200, 128, 8, False, lambda x, y: noisy((64, 68, 58), 4))
 
 
-# (0,32) боковая сдвижная дверь 16x16
-def door(x, y):
-    if x in (0, 15) or y in (0, 15):
-        return shade(noisy(OLIVE, 5), 0.7)
-    d = math.hypot(x - 7.5, y - 4.5)
-    if d < 2.4:
-        return noisy(GLASS, 4)
-    if d < 3.2:
-        return (40, 42, 38)
-    if y == 9 and 11 <= x <= 13:
-        return (140, 140, 132)  # ручка
-    return hull(OLIVE, 0.05, False, 3)(x, y)
+def intake_px(x, y):
+    d = math.hypot(x - 15.5, y - 15.5)
+    ang = math.atan2(y - 15.5, x - 15.5)
+    if d < 4:
+        return noisy((70, 72, 70), 5)
+    if int((ang + math.pi) / (2 * math.pi) * 18) % 2 == 0:
+        return noisy((22, 22, 21), 3)
+    return noisy((42, 43, 41), 3)
 
 
-fill(0, 32, 16, 16, door)
-fill(16, 32, 16, 16, lambda x, y: mix(noisy((100, 108, 90), 6), (70, 60, 40), 0.5 if RNG.random() < 0.08 else 0))
-fill(32, 32, 16, 16, lambda x, y: shade(camo(x, y), 0.7) if x in (0, 15) or y % 5 == 0 else camo(x, y))
-# (48,32) предупреждающая полоса, (56,32) ящик с патронами, (48,40) красный, (56,40) хром
-fill(48, 32, 8, 8, lambda x, y: (190, 40, 30) if ((x + y) // 2) % 2 == 0 else (215, 210, 196))
-fill(56, 32, 8, 8, lambda x, y: (190, 170, 60) if y == 3 and 1 <= x <= 6 else shade(noisy((80, 86, 50), 6), 0.7 if x in (0, 7) else 1))
-fill(48, 40, 8, 8, lambda x, y: (220, 210, 200) if (x in (3, 4) and 1 <= y <= 6) or (y in (3, 4) and 1 <= x <= 6) else noisy(RED, 10))
-fill(56, 40, 8, 8, lambda x, y: noisy((150, 150, 144), 10))
-# (0,48) полоса лопасти 64x4
-fill(0, 48, 64, 4, lambda x, y: shade(noisy((72, 76, 62), 5), 0.75 if y in (0, 3) else (1.1 if x % 12 == 0 else 1)))
-# (0,52) решётка, (16,52) кожа, (32,52) мох/грязь, (48,52) кабели/разное
-fill(0, 52, 16, 12, lambda x, y: (18, 18, 17) if x % 3 == 0 or y % 3 == 0 else noisy((46, 48, 44), 4))
-fill(16, 52, 16, 12, lambda x, y: noisy((56, 44, 36), 6))
-fill(32, 52, 16, 12, lambda x, y: noisy((70, 82, 38), 10) if RNG.random() < 0.6 else noisy((82, 66, 44), 8))
-fill(48, 52, 16, 12, lambda x, y: noisy((36, 44, 34), 6) if (x + y) % 4 else (20, 20, 20))
-
-MAT = {  # имя: (u, v, w, h, растягивать_целиком)
-    "hull": (0, 0, 16, 16, False),
-    "camo": (16, 0, 16, 16, False),
-    "rust": (32, 0, 16, 16, False),
-    "metal": (48, 0, 16, 16, False),
-    "glass": (0, 16, 16, 16, True),
-    "porthole": (16, 16, 8, 8, True),
-    "star": (24, 16, 8, 8, True),
-    "number": (16, 24, 16, 8, True),
-    "tire": (32, 16, 8, 8, False),
-    "blade": (40, 16, 8, 8, False),
-    "floor": (48, 16, 8, 8, False),
-    "wall": (56, 16, 8, 8, False),
-    "canvas": (32, 24, 8, 8, True),
-    "panel": (40, 24, 8, 8, True),
-    "crate": (48, 24, 8, 8, True),
-    "soot": (56, 24, 8, 8, False),
-    "door": (0, 32, 16, 16, True),
-    "belly": (16, 32, 16, 16, False),
-    "rear": (32, 32, 16, 16, True),
-    "warn": (48, 32, 8, 8, True),
-    "ammo": (56, 32, 8, 8, True),
-    "red": (48, 40, 8, 8, True),
-    "chrome": (56, 40, 8, 8, False),
-    "bladestrip": (0, 48, 64, 4, True),
-    "grille": (0, 52, 16, 12, True),
-    "leather": (16, 52, 16, 12, False),
-    "moss": (32, 52, 16, 12, False),
-    "cable": (48, 52, 16, 12, False),
-}
-
-
-def png_bytes():
-    raw = b"".join(b"\x00" + b"".join(bytes(p) for p in row) for row in img)
-
-    def chunk(t, d):
-        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
-    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", TEX, TEX, 8, 6, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
-
+tile("intake", 224, 192, 32, 32, True, intake_px)
+tile("exhaust", 96, 208, 32, 16, False, lambda x, y: mix(noisy((64, 60, 54), 6), RUST, 0.35 if fbm(x * .3, y * .3, 31) > 0.6 else 0))
+tile("interior_dark", 0, 208, 32, 16, False, lambda x, y: noisy((40, 44, 40), 4))
+tile("glass_frame", 64, 208, 32, 16, False, lambda x, y: noisy((58, 64, 42), 5))
 
 # ---------------------------------------------------------------------------
-# Геометрия. Единицы Blockbench (16 = 1 блок). Нос смотрит на север (-Z).
+# Кубы
 # ---------------------------------------------------------------------------
 elements = []
-FACE_AXES = {  # грань: (ось u, ось v)
-    "north": (0, 1), "south": (0, 1), "east": (2, 1), "west": (2, 1), "up": (0, 2), "down": (0, 2),
-}
+FACE_AXES = {"north": (0, 1), "south": (0, 1), "east": (2, 1), "west": (2, 1), "up": (0, 2), "down": (0, 2)}
+DENS = 2.0  # пикселей текстуры на единицу модели для «не целых» материалов
 
 
 def face_uv(mat, size, face):
@@ -296,53 +316,157 @@ def face_uv(mat, size, face):
     if whole:
         return [u, v, u + w, v + h]
     au, av = FACE_AXES[face]
-    fw = max(1.0, min(w, size[au] * 0.5))
-    fh = max(1.0, min(h, size[av] * 0.5))
-    ou = RNG.uniform(0, w - fw)
-    ov = RNG.uniform(0, h - fh)
+    fw = max(0.5, min(w, size[au] * DENS))
+    fh = max(0.5, min(h, size[av] * DENS))
+    ou, ov = RNG.uniform(0, w - fw), RNG.uniform(0, h - fh)
     q = lambda n: round(n * 4) / 4
     return [q(u + ou), q(v + ov), q(u + ou + fw), q(v + ov + fh)]
 
 
-def cube(name, frm, to, mat="hull", faces=None, origin=None, rot=None):
-    faces = faces or {}
-    frm, to = [round(min(a, b), 4) for a, b in zip(frm, to)], [max(a, b) for a, b in zip(frm, to)]
-    to_ = [round(max(a, b), 4) for a, b in zip(frm, to)]
-    size = [t - f for f, t in zip(frm, to_)]
-    el = {
-        "name": name, "box_uv": False, "rescale": False, "locked": False,
-        "render_order": "default", "allow_mirror_modeling": True,
-        "from": frm, "to": to_, "autouv": 0, "color": RNG.randrange(8),
-        "origin": origin or [round((f + t) / 2, 4) for f, t in zip(frm, to_)],
-        "faces": {f: {"uv": face_uv(faces.get(f, mat), size, f), "texture": 0}
-                  for f in ("north", "east", "south", "west", "up", "down")},
-        "type": "cube", "uuid": new_uuid(),
-    }
-    if rot and any(rot):
+def make_el(name, frm, to, faces, origin, rot):
+    size = [t - f for f, t in zip(frm, to)]
+    fdict = {}
+    for f in ("north", "east", "south", "west", "up", "down"):
+        spec = faces[f]
+        uv = spec if isinstance(spec, list) else face_uv(spec, size, f)
+        fdict[f] = {"uv": [round(x, 3) for x in uv], "texture": 0}
+    el = {"name": name, "box_uv": False, "rescale": False, "locked": False,
+          "render_order": "default", "allow_mirror_modeling": True,
+          "from": [round(x, 4) for x in frm], "to": [round(x, 4) for x in to],
+          "autouv": 0, "color": RNG.randrange(8), "origin": [round(x, 4) for x in origin],
+          "faces": fdict, "type": "cube", "uuid": new_uuid()}
+    if rot and any(abs(r) > 1e-4 for r in rot):
         el["rotation"] = rot
     elements.append(el)
     return el["uuid"]
 
 
-def mirror_x(frm, to):
-    return [-to[0], frm[1], frm[2]], [-frm[0], to[1], to[2]]
-
-
-def pair(name, frm, to, mat="hull", faces=None, origin=None, rot=None):
-    """Левый (x<0) и правый зеркальный кубы. Грани east/west меняются местами."""
+def cube(name, frm, to, mat="hull", faces=None, origin=None, rot=None):
     faces = faces or {}
-    a = cube(name + "_L", frm, to, mat, faces, origin, rot)
-    mf, mt = mirror_x(frm, to)
-    swap = {"east": "west", "west": "east"}
-    mfaces = {swap.get(k, k): v for k, v in faces.items()}
-    mo = [-origin[0], origin[1], origin[2]] if origin else None
-    mr = [rot[0], -rot[1], -rot[2]] if rot else None
-    b = cube(name + "_R", mf, mt, mat, mfaces, mo, mr)
-    return [a, b]
+    a = [min(p, q) for p, q in zip(frm, to)]
+    b = [max(p, q) for p, q in zip(frm, to)]
+    fs = {f: faces.get(f, mat) for f in FACE_AXES}
+    return make_el(name, a, b, fs, origin or [(p + q) / 2 for p, q in zip(a, b)], rot)
+
+
+def ocube(name, O, X, Y, Z, lo, hi, faces):
+    """Куб в локальном базисе (X,Y,Z) с началом O; lo/hi — локальные границы."""
+    frm = [O[i] + lo[i] for i in range(3)]
+    to = [O[i] + hi[i] for i in range(3)]
+    return make_el(name, frm, to, faces, list(O), euler_zyx(X, Y, Z))
+
+
+def basis_from(dirz, hint=(0, 1, 0)):
+    Z = norm(dirz)
+    if abs(dot(Z, norm(hint))) > 0.95:
+        hint = (1, 0, 0)
+    X = norm(cross(hint, Z))
+    Y = cross(Z, X)
+    return X, Y, Z
+
+
+def rod(name, p0, p1, r, mat="metal"):
+    """Стержень из двух квадратных кубов, повёрнутых на 45° — восьмигранник."""
+    X, Y, Z = basis_from(sub(p1, p0))
+    L = length(sub(p1, p0))
+    O = mul(add(p0, p1), 0.5)
+    s = r * 0.924
+    out = []
+    for k, ang in enumerate((0, 45)):
+        a = math.radians(ang)
+        Xa = add(mul(X, math.cos(a)), mul(Y, math.sin(a)))
+        Ya = cross(Z, Xa)
+        out.append(ocube(f"{name}_{k}", O, Xa, Ya, Z, (-s, -s, -L / 2), (s, s, L / 2),
+                         {f: mat for f in FACE_AXES}))
+    return out
+
+
+def disc(name, C, normal, r, t, mat="metal", face_mat=None, n=6):
+    """Круглый диск из n тонких прямоугольников, повёрнутых вокруг нормали
+    (объединение даёт почти идеальный 4n-угольник без торчащих углов)."""
+    X, Y, Z = basis_from(normal)
+    hw = r * math.tan(math.pi / (2 * n))
+    out = []
+    fm = face_mat or mat
+    for k in range(n):
+        a = math.pi * k / n
+        Xa = add(mul(X, math.cos(a)), mul(Y, math.sin(a)))
+        Ya = cross(Z, Xa)
+        out.append(ocube(f"{name}_{k}", C, Xa, Ya, Z, (-r, -hw, -t / 2), (r, hw, t / 2),
+                         {"north": fm, "south": fm, "east": mat, "west": mat, "up": mat, "down": mat}))
+    return out
+
+
+def panel(name, p0, p1, p2, p3, ref, t, outer, inner="wall", edge="hull"):
+    """Панель обшивки по четырёхугольнику p0-p1 (одно сечение), p3-p2 (следующее).
+    Внешняя грань (up) лежит на поверхности, толщина уходит внутрь.
+    outer: имя материала или uv-прямоугольник [u0,v0,u1,v1] (u вдоль p0->p1, v вдоль p0->p3)."""
+    u = mul(add(sub(p1, p0), sub(p2, p3)), 0.5)
+    v = mul(add(sub(p3, p0), sub(p2, p1)), 0.5)
+    if length(u) < 0.03 or length(v) < 0.03:
+        return None
+    c = mul(add(add(p0, p1), add(p2, p3)), 0.25)
+    X = norm(u)
+    Z = norm(sub(v, mul(X, dot(v, X))))
+    Y = cross(Z, X)
+    flipped = False
+    if dot(Y, sub(c, ref)) < 0:
+        X, Y, flipped = mul(X, -1), mul(Y, -1), True
+    w = length(u) * 1.03 + 0.06
+    L = dot(v, Z) + 0.12
+    if isinstance(outer, list) and flipped:
+        outer = [outer[2], outer[1], outer[0], outer[3]]
+    return ocube(name, c, X, Y, Z, (-w / 2, -t, -L / 2), (w / 2, 0, L / 2),
+                 {"up": outer, "down": inner, "north": edge, "south": edge, "east": edge, "west": edge})
+
+
+def loft(name, rings, centers, t, outer_fn, dest_fn, closed=True, inner="wall", edge="hull"):
+    """rings[i] — список точек сечения i. outer_fn(i,k,c) -> материал или uv.
+    dest_fn(i,k,c) -> список, куда положить uuid (или None — пропустить)."""
+    n = len(rings[0])
+    segs = n if closed else n - 1
+    for i in range(len(rings) - 1):
+        ref = mul(add(centers[i], centers[i + 1]), 0.5)
+        for k in range(segs):
+            k1 = (k + 1) % n
+            p0, p1, p2, p3 = rings[i][k], rings[i][k1], rings[i + 1][k1], rings[i + 1][k]
+            c = mul(add(add(p0, p1), add(p2, p3)), 0.25)
+            dest = dest_fn(i, k, c)
+            if dest is None:
+                continue
+            inn = inner(i, k, c) if callable(inner) else inner
+            uid = panel(f"{name}_{i}_{k}", p0, p1, p2, p3, ref, t, outer_fn(i, k, c), inn, edge)
+            if uid:
+                dest.append(uid)
+
+
+def ring_frame(C, T, ref):
+    e1 = norm(sub(ref, mul(T, dot(ref, T))))
+    e2 = cross(T, e1)
+    return e1, e2
+
+
+def tube(name, path, radii, n, dest, outer="hull", inner="soot", t=0.35, ref=(0, 1, 0), edge="hull"):
+    """Труба по ломаной path; radii — (r1, r2) по осям e1/e2 на каждую точку."""
+    rings, centers = [], []
+    for i, C in enumerate(path):
+        if i == 0:
+            T = sub(path[1], path[0])
+        elif i == len(path) - 1:
+            T = sub(path[-1], path[-2])
+        else:
+            T = add(norm(sub(path[i], path[i - 1])), norm(sub(path[i + 1], path[i])))
+        T = norm(T)
+        e1, e2 = ring_frame(C, T, ref)
+        r1, r2 = radii[i] if isinstance(radii[i], tuple) else (radii[i], radii[i])
+        rings.append([add(C, add(mul(e1, r1 * math.cos(2 * math.pi * k / n)),
+                                 mul(e2, r2 * math.sin(2 * math.pi * k / n)))) for k in range(n)])
+        centers.append(C)
+    loft(name, rings, centers, t, lambda i, k, c: outer, lambda i, k, c: dest, inner=inner, edge=edge)
 
 
 def group(name, origin, children, rotation=None):
-    g = {"name": name, "origin": origin, "color": 0, "uuid": new_uuid(), "export": True,
+    g = {"name": name, "origin": [round(x, 4) for x in origin], "color": 0, "uuid": new_uuid(), "export": True,
          "mirror_uv": False, "isOpen": False, "locked": False, "visibility": True,
          "autouv": 0, "children": children}
     if rotation:
@@ -350,279 +474,637 @@ def group(name, origin, children, rotation=None):
     return g
 
 
-IN = {"east": "wall"}   # внутренняя грань левой стены
-IN_R = {"west": "wall"}
+# ---------------------------------------------------------------------------
+# Профиль фюзеляжа: z -> (a полуширина, yb низ, yt верх, n_top, n_bottom)
+# Нос смотрит на север (-Z).
+# ---------------------------------------------------------------------------
+STATIONS = [
+    (-48.4, 0.8, 9.3, 10.6, 2.0, 2.0),
+    (-47.9, 2.8, 8.0, 12.8, 2.2, 2.2),
+    (-47.0, 4.8, 6.9, 14.8, 2.4, 2.4),
+    (-45.6, 6.7, 6.0, 17.2, 2.5, 2.8),
+    (-43.8, 8.2, 5.5, 20.0, 2.6, 3.2),
+    (-41.8, 9.2, 5.2, 22.5, 2.7, 3.6),
+    (-39.5, 10.0, 5.0, 24.8, 2.8, 4.0),
+    (-37.0, 10.5, 5.0, 26.6, 3.0, 4.2),
+    (-34.0, 10.8, 5.0, 27.8, 3.2, 4.4),
+    (-30.0, 11.0, 5.0, 28.4, 3.4, 4.5),
+    (16.0, 11.0, 5.0, 28.5, 3.4, 4.5),
+    (20.0, 10.9, 5.4, 28.5, 3.4, 4.3),
+    (24.0, 10.4, 7.2, 28.3, 3.2, 3.8),
+    (28.0, 9.3, 10.6, 28.0, 3.0, 3.2),
+    (32.0, 7.9, 14.2, 27.7, 2.8, 2.9),
+    (35.0, 6.8, 17.0, 27.4, 2.7, 2.7),
+    (38.0, 6.0, 18.8, 27.2, 2.6, 2.6),
+    (44.0, 5.2, 19.6, 26.9, 2.3, 2.3),
+    (60.0, 4.3, 20.4, 26.3, 2.1, 2.1),
+    (80.0, 3.4, 21.1, 25.7, 2.0, 2.0),
+    (98.0, 2.7, 21.6, 25.2, 2.0, 2.0),
+    (104.0, 2.1, 22.0, 25.0, 2.0, 2.0),
+    (105.6, 0.7, 22.9, 24.3, 2.0, 2.0),
+]
 
-# --- Фюзеляж (грузовая кабина): x -11..11, y 6..28, z -26..24 ---
-fus = []
-fus.append(cube("floor", [-11, 6, -26], [11, 7, 24], "hull", {"up": "floor", "down": "belly"}))
-fus.append(cube("floor_sill", [-11, 6, 24], [11, 7, 30], "hull", {"up": "floor", "down": "belly"}))
-fus.append(cube("belly_step", [-10, 5, -26], [10, 6, 24], "belly"))
-fus.append(cube("roof", [-11, 27, -26], [11, 28, 24], "hull", {"down": "wall"}))
-fus.append(cube("roof_crown", [-9, 28, -26], [9, 29, 24], "camo"))
-fus.append(cube("wall_L_front", [-11, 7, -26], [-10, 27, -24], "hull", IN))
-fus.append(cube("wall_L_overdoor", [-11, 24, -24], [-10, 27, -15], "hull", IN))
-fus.append(cube("wall_L_rear", [-11, 7, -15], [-10, 27, 24], "camo", IN))
-fus.append(cube("wall_R", [10, 7, -26], [11, 27, 24], "camo", IN_R))
-fus += pair("chine_low", [-11.6, 6, -26], [-11, 8, 24], "belly")
-fus += pair("chine_top", [-11.4, 26, -26], [-10.4, 28.4, 24], "hull", origin=[-11, 27, 0], rot=[0, 0, -40])
-fus.append(cube("bulkhead_L", [-11, 7, -27], [-3, 27, -26], "wall", {"north": "wall"}))
-fus.append(cube("bulkhead_R", [3, 7, -27], [11, 27, -26], "wall"))
-fus.append(cube("bulkhead_top", [-3, 23, -27], [3, 27, -26], "wall"))
-# Задняя часть над створками и переход в хвостовую балку
-fus.append(cube("rear_fairing", [-10, 20, 24], [10, 28, 32], "camo", {"down": "wall"}))
-fus.append(cube("rear_fairing_top", [-8, 28, 24], [8, 29, 30], "camo"))
-fus += pair("porthole", [-11.3, 17, -12], [-11, 21, -8], "porthole")
-for i, zc in enumerate([-3, 4, 11, 18]):
-    fus.append(cube(f"porthole_L{i}", [-11.3, 17, zc - 2], [-11, 21, zc + 2], "porthole"))
-for i, zc in enumerate([-21, -14, -3, 4, 11, 18]):
-    fus.append(cube(f"porthole_R{i}", [11, 17, zc - 2], [11.3, 21, zc + 2], "porthole"))
-# внутренние «окна» иллюминаторов
-for zc in [-10, -3, 4, 11, 18]:
-    fus.append(cube("porthole_in_L", [-10, 17, zc - 2], [-9.8, 21, zc + 2], "porthole"))
-for zc in [-21, -14, -10, -3, 4, 11, 18]:
-    fus.append(cube("porthole_in_R", [9.8, 17, zc - 2], [10, 21, zc + 2], "porthole"))
-fus.append(cube("door_rail", [-12.6, 24.2, -24], [-11, 25, -4], "metal"))
-fus.append(cube("door_step", [-13, 4.5, -23], [-11, 5.3, -16], "metal"))
-fus.append(cube("hoist_arm", [-15, 25, -23], [-11, 26, -21], "metal"))
-fus.append(cube("hoist_winch", [-16, 23.5, -23.5], [-14, 26, -20.5], "metal"))
-fus += pair("pitot", [-6.2, 12, -52], [-5.8, 12.4, -44], "chrome")
-fus.append(cube("antenna_top", [-0.3, 29, -6], [0.3, 33, -5], "metal"))
-fus.append(cube("antenna_belly", [-0.3, 2, 10], [0.3, 5, 11], "metal"))
-fus.append(cube("beacon_red", [-0.8, 29, 18], [0.8, 30, 19.6], "red"))
 
-# --- Кабина пилотов и нос ---
+def pchip(xs, ys):
+    n = len(xs)
+    h = [xs[i + 1] - xs[i] for i in range(n - 1)]
+    d = [(ys[i + 1] - ys[i]) / h[i] for i in range(n - 1)]
+    m = [0.0] * n
+    m[0], m[-1] = d[0], d[-1]
+    for i in range(1, n - 1):
+        if d[i - 1] * d[i] <= 0:
+            m[i] = 0
+        else:
+            w1, w2 = 2 * h[i] + h[i - 1], h[i] + 2 * h[i - 1]
+            m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])
+
+    def f(x):
+        if x <= xs[0]:
+            return ys[0]
+        if x >= xs[-1]:
+            return ys[-1]
+        i = max(j for j in range(n - 1) if xs[j] <= x)
+        t = (x - xs[i]) / h[i]
+        h00, h10 = 2 * t ** 3 - 3 * t ** 2 + 1, t ** 3 - 2 * t ** 2 + t
+        h01, h11 = -2 * t ** 3 + 3 * t ** 2, t ** 3 - t ** 2
+        return h00 * ys[i] + h10 * h[i] * m[i] + h01 * ys[i + 1] + h11 * h[i] * m[i + 1]
+    return f
+
+
+def make_profile(stations):
+    zs = [s[0] for s in stations]
+    fns = [pchip(zs, [s[j] for s in stations]) for j in range(1, 6)]
+    return lambda z: tuple(f(z) for f in fns)
+
+
+PROF = make_profile(STATIONS)
+
+
+def spow(v, e):
+    return math.copysign(abs(v) ** e, v)
+
+
+def se_point(z, th, prof=PROF, xoff=0.0):
+    a, yb, yt, nt, nb = prof(z)
+    yc, h = (yt + yb) / 2, (yt - yb) / 2
+    c = math.cos(th)
+    n = nt if c >= 0 else nb
+    return (xoff + a * spow(math.sin(th), 2 / n), yc + h * spow(c, 2 / n), z)
+
+
+def halfwidth(z, y, prof=PROF):
+    a, yb, yt, nt, nb = prof(z)
+    yc, h = (yt + yb) / 2, (yt - yb) / 2
+    c = max(-1, min(1, (y - yc) / h))
+    n = nt if c >= 0 else nb
+    cth = abs(c) ** (n / 2)
+    return a * (max(0, 1 - cth * cth) ** 0.5) ** (2 / n)
+
+
+def arc_thetas(n, z_ref, prof=PROF, th0=0.0, th1=2 * math.pi, closed=True):
+    """Параметры θ с равной длиной дуги на эталонном сечении."""
+    M = 4000
+    ths = [th0 + (th1 - th0) * i / M for i in range(M + 1)]
+    pts = [se_point(z_ref, t, prof) for t in ths]
+    cum = [0.0]
+    for i in range(1, len(pts)):
+        cum.append(cum[-1] + length(sub(pts[i], pts[i - 1])))
+    out, j = [], 0
+    count = n if closed else n + 1
+    for k in range(count):
+        target = cum[-1] * k / n
+        while j < M and cum[j + 1] < target:
+            j += 1
+        f = (target - cum[j]) / max(1e-9, cum[j + 1] - cum[j]) if j < M else 0
+        out.append(ths[j] + (ths[min(j + 1, M)] - ths[j]) * f)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Обшивка фюзеляжа + хвостовой балки
+# ---------------------------------------------------------------------------
+NSEG = 28
+THETAS = arc_thetas(NSEG, 0.0)
+Z_RINGS = [-48.4, -47.9, -47.0, -46.0, -44.8, -43.4, -41.8, -40.0, -38.0, -36.0, -33.5, -31.0,
+           -28.5, -26.0, -24.0, -21.0, -18.0, -15.0, -12.0, -8.5, -5.0, -1.5, 2.0, 5.5, 9.0, 12.5,
+           16.0, 20.0, 23.0, 26.0, 29.0, 32.0, 35.0, 38.0, 42.0, 47.0, 53.0, 59.0, 65.0, 71.0,
+           77.0, 83.0, 89.0, 95.0, 100.0, 104.0, 105.6]
+Z_SPLIT = 38.0          # граница развёрток A (кабина) и B (балка)
+REG_A = (0, 0, 128, 128, -48.4, Z_SPLIT)
+REG_B = (128, 0, 64, 128, Z_SPLIT, 105.6)
+HULL_T = 0.6
+
+fus_panels, side_door_panels, rear_L_panels, rear_R_panels = [], [], [], []
+door_rects = {"side": [], "rear_L": [], "rear_R": []}
+
+
+def is_glass(i, k, c):
+    x, y, z = c
+    if -38.0 <= z <= -36.0 or -28.5 <= z:
+        return False  # стойки
+    if -47.2 <= z <= -41.8 and 7.6 <= y <= 12.6 and abs(x) > 1.2:
+        return True   # нижнее остекление носа
+    if -47.6 <= z <= -28.5 and 15.0 <= y <= 26.6:
+        if -36 < z and y > 25.0:
+            return False
+        if k % 4 == 0 or -44.8 <= z <= -43.4:
+            return False  # рама остекления
+        return True
+    return False
+
+
+def hull_uv(i, k):
+    z0, z1 = Z_RINGS[i], Z_RINGS[i + 1]
+    reg = REG_A if z1 <= Z_SPLIT + 1e-6 else REG_B
+    u0, v0, w, h, za, zb = reg
+    fu = lambda kk: u0 + w * kk / NSEG
+    fv = lambda zz: v0 + h * (zz - za) / (zb - za)
+    return [fu(k), fv(z0), fu(k + 1), fv(z1)]
+
+
+def hull_dest(i, k, c):
+    x, y, z = c
+    if x < 0 and -24 < z < -15 and 8 < y < 24.5:
+        door_rects["side"].append(hull_uv(i, k))
+        return side_door_panels
+    if 20 < z < Z_SPLIT and y < 18.5:
+        key = "rear_L" if x < 0 else "rear_R"
+        door_rects[key].append(hull_uv(i, k))
+        return rear_L_panels if x < 0 else rear_R_panels
+    return fus_panels
+
+
+def hull_outer(i, k, c):
+    return "glass" if is_glass(i, k, c) else hull_uv(i, k)
+
+
+def hull_inner(i, k, c):
+    if is_glass(i, k, c):
+        return "glass"
+    return "wall" if c[2] < 36 else "interior_dark"
+
+
+rings = [[se_point(z, th) for th in THETAS] for z in Z_RINGS]
+centers = [(0, (PROF(z)[1] + PROF(z)[2]) / 2, z) for z in Z_RINGS]
+loft("hull", rings, centers, HULL_T, hull_outer, hull_dest, inner=hull_inner)
+fus_panels += disc("nose_cap", (0, 9.95, -48.5), (0, 0, 1), 0.9, 0.3, "hull")
+fus_panels += disc("boom_end_cap", (0, 23.6, 105.7), (0, 0, 1), 0.8, 0.3, "hull")
+
+
+# --- роспись развёрток A и B по мировым координатам ---
+def theta_at(kf):
+    k0 = int(math.floor(kf)) % NSEG
+    f = kf - math.floor(kf)
+    t0 = THETAS[k0]
+    t1 = THETAS[(k0 + 1) % NSEG] + (2 * math.pi if k0 + 1 == NSEG else 0)
+    return lerp(t0, t1, f)
+
+
+PANEL_Z = [-38, -28.5, -24, -15, -5, 5.5, 16, 26, 38, 53, 71, 89]
+PANEL_Y = [9.5, 24.8]
+STREAKS = [(RNG.uniform(-44, 100), RNG.uniform(14, 27), RNG.uniform(3, 9), RNG.choice((-1, 1))) for _ in range(26)]
+
+
+def hull_px(x, y, z, seed):
+    c = camo_color(z + (0 if x < 0 else 300), y * 1.4, seed)
+    # грязь снизу и светлое брюхо
+    if y < 9:
+        c = mix(c, (84, 74, 52), min(0.55, (9 - y) * 0.12))
+    if y < 6.2:
+        c = mix(c, (98, 104, 86), 0.5)
+    # копоть за выхлопными трубами
+    if abs(x) > 5 and y > 21 and z > -2:
+        s = math.exp(-(z + 2) / 26) * max(0, min(1, (y - 21) / 5))
+        c = mix(c, (30, 28, 26), s * 0.75 * (0.7 + 0.3 * fbm(z * .5, y * .5, 30)))
+    # потёки ржавчины
+    for sz, sy, sl, sd in STREAKS:
+        if (x < 0) == (sd < 0) and abs(z - sz) < 0.45 and sy - sl < y < sy:
+            c = mix(c, RUST, 0.4 * (y - (sy - sl)) / sl + 0.1)
+    # швы панелей и заклёпки
+    tex_z = 0.34 if z < Z_SPLIT else 0.26
+    for pz in PANEL_Z:
+        if abs(z - pz) < tex_z:
+            c = shade(c, 0.72)
+    for py in PANEL_Y:
+        if abs(y - py) < 0.28 and z < 36:
+            c = shade(c, 0.78 if (int(z * 1.5) % 2) else 1.15)
+    return c
+
+
+def paint_region(reg, seed):
+    u0, v0, w, h, za, zb = reg
+    for py in range(h):
+        z = za + (zb - za) * (py + 0.5) / h
+        for px in range(w):
+            kf = (px + 0.5) / w * NSEG
+            x, y, _ = se_point(z, theta_at(kf))
+            put(u0 + px, v0 + py, hull_px(x, y, z, seed))
+
+
+paint_region(REG_A, 11)
+paint_region(REG_B, 12)
+
+
+def outline_rects(rects, col=(34, 36, 26)):
+    if not rects:
+        return
+    us = [min(r[0], r[2]) for r in rects] + [max(r[0], r[2]) for r in rects]
+    vs = [r[1] for r in rects] + [r[3] for r in rects]
+    x0, x1, y0, y1 = int(round(min(us))), int(round(max(us))) - 1, int(round(min(vs))), int(round(max(vs))) - 1
+    for x in range(x0, x1 + 1):
+        for y in (y0, y1):
+            put(x, y, col)
+    for y in range(y0, y1 + 1):
+        for x in (x0, x1):
+            put(x, y, col)
+
+
+for key in door_rects:
+    outline_rects(door_rects[key])
+
+# ---------------------------------------------------------------------------
+# Декали (иллюминаторы, звёзды, номер) — тонкие кубы по касательной к обшивке
+# ---------------------------------------------------------------------------
+
+
+def surface_frame(side, z, y, prof=PROF):
+    hw = halfwidth(z, y, prof)
+    e = 0.05
+    dy = (halfwidth(z, y + e, prof) - halfwidth(z, y - e, prof)) / (2 * e)
+    dz = (halfwidth(z + e, y, prof) - halfwidth(z - e, y, prof)) / (2 * e)
+    n = norm((side, -dy, -dz))
+    return (side * hw, y, z), n
+
+
+def decal(name, side, z, y, w, h, mat, offset=0.04, thick=0.2, inside=False, prof=PROF):
+    P, n = surface_frame(side, z, y, prof)
+    if inside:
+        P = add(P, mul(n, -(HULL_T + offset)))
+        n = mul(n, -1)
+        side = -side
+    else:
+        P = add(P, mul(n, offset))
+    Xh = (0, 0, 1) if side < 0 else (0, 0, -1)
+    X = norm(sub(Xh, mul(n, dot(Xh, n))))
+    Y = n
+    Z = cross(X, Y)
+    return ocube(name, P, X, Y, Z, (-w / 2, -thick, -h / 2), (w / 2, 0, h / 2),
+                 {"up": mat, "down": mat, "north": "hull", "south": "hull", "east": "hull", "west": "hull"})
+
+
+decals = []
+PORTS_L = [-9.5, -2.5, 4.5, 11.5, 18.0]
+PORTS_R = [-21.5, -14.5, -7.5, -0.5, 6.5, 13.5]
+for zc in PORTS_L:
+    decals.append(decal("porthole_L", -1, zc, 19.5, 4.2, 4.2, "porthole"))
+    decals.append(decal("porthole_L_in", -1, zc, 19.5, 4.2, 4.2, "porthole", inside=True))
+for zc in PORTS_R:
+    decals.append(decal("porthole_R", 1, zc, 19.5, 4.2, 4.2, "porthole"))
+    decals.append(decal("porthole_R_in", 1, zc, 19.5, 4.2, 4.2, "porthole", inside=True))
+for side in (-1, 1):
+    s = "L" if side < 0 else "R"
+    decals.append(decal(f"star_boom_{s}", side, 52, 23.2, 5.5, 5.5, "star"))
+    decals.append(decal(f"star_cabin_{s}", side, 27.5, 21.5, 6.5, 6.5, "star"))
+decals.append(decal("number_L", -1, 7, 23.4, 7.2, 3.6, "number", offset=0.12))
+decals.append(decal("number_R", 1, 18, 23.4, 7.2, 3.6, "number", offset=0.12))
+decals.append(decal("number_boom_L", -1, 66, 23.3, 6, 3, "number"))
+decals.append(decal("number_boom_R", 1, 66, 23.3, 6, 3, "number"))
+
+# ---------------------------------------------------------------------------
+# Пол, переборка, мелочи фюзеляжа
+# ---------------------------------------------------------------------------
+fus_misc = []
+
+
+def floor_strips(z0, z1, y_top, dest, mat="floor"):
+    zs = [z for z in Z_RINGS if z0 <= z <= z1]
+    for a, b in zip(zs, zs[1:]):
+        hw = min(halfwidth(a, y_top), halfwidth(b, y_top)) - HULL_T - 0.1
+        if hw > 1:
+            dest.append(cube("floor", [-hw, y_top - 0.8, a], [hw, y_top, b], "interior_dark", {"up": mat}))
+
+
+floor_strips(-44.8, 20.0, 7.0, fus_misc)
+
+
+def cap(name, z, t, dest, mat="wall", hole=None, rows=12, prof=PROF, faces=None):
+    a, yb, yt, nt, nb = prof(z)
+    ys = [yb + (yt - yb) * i / rows for i in range(rows + 1)]
+    for y0, y1 in zip(ys, ys[1:]):
+        hw = min(halfwidth(z, y0 + 0.01, prof), halfwidth(z, y1 - 0.01, prof)) - 0.2
+        if hw < 0.3:
+            continue
+        spans = [(-hw, hw)]
+        if hole and y1 > hole[2] and y0 < hole[3]:
+            spans = [(-hw, hole[0]), (hole[1], hw)]
+        for xa, xb in spans:
+            if xb - xa > 0.2:
+                dest.append(cube(name, [xa, y0, z - t / 2], [xb, y1, z + t / 2], mat, faces))
+
+
+cap("bulkhead", -27.2, 0.8, fus_misc, "wall", hole=(-3, 3, 7, 23.2))
+
+fus_misc += rod("door_rail", (-11.9, 25.2, -24.5), (-11.9, 25.2, -4.5), 0.4, "metal")
+fus_misc.append(cube("door_step", [-13, 4.6, -23], [-10.6, 5.2, -16], "metal"))
+fus_misc += rod("hoist_arm", (-10.8, 26.2, -22), (-15.2, 26.6, -22), 0.5, "metal")
+fus_misc += rod("pitot_L", (-5.2, 12.8, -45.5), (-5.2, 12.8, -53), 0.25, "chrome")
+fus_misc += rod("pitot_R", (5.2, 12.8, -45.5), (5.2, 12.8, -53), 0.25, "chrome")
+fus_misc += rod("antenna_top", (0, 28, -6), (0, 32, -4.5), 0.2, "metal")
+fus_misc += rod("antenna_belly", (0, 5.2, 10), (0, 2.5, 11.5), 0.2, "metal")
+fus_misc += disc("beacon_red", (0, 28.6, 18.5), (0, 1, 0), 0.9, 0.8, "red")
+fus_misc += rod("wiper_L", (-3, 15.8, -40.6), (-6, 20.5, -38.1), 0.15, "metal")
+fus_misc += rod("wiper_R", (3, 15.8, -40.6), (6, 20.5, -38.1), 0.15, "metal")
+fus_misc += rod("mirror_arm", (-9.6, 16, -41), (-12.5, 16.6, -42), 0.2, "metal")
+fus_misc.append(cube("mirror", [-13.3, 15.8, -42.6], [-12.3, 17.4, -42.3], "metal", origin=[-12.8, 16.6, -42.4], rot=[0, 20, 0]))
+_winch = []
+tube("hoist_winch", [(-15.4, 26.8, -24), (-15.4, 26.8, -20)], [1.2, 1.2], 8, _winch, "metal", "metal")
+fus_misc += _winch
+
+# ---------------------------------------------------------------------------
+# Кабина пилотов (интерьер)
+# ---------------------------------------------------------------------------
 ck = []
-ck.append(cube("cockpit_floor", [-10, 6, -40], [10, 7, -27], "hull", {"up": "floor", "down": "belly"}))
-ck += pair("cockpit_wall_low", [-10, 7, -38], [-9, 16, -27], "hull", IN)
-ck += pair("cockpit_blister", [-10.4, 16, -36], [-9.4, 25, -28], "glass")
-ck += pair("cockpit_pillar", [-10.4, 16, -28], [-9, 27, -27], "hull")
-ck += pair("cockpit_pillar_front", [-10.4, 16, -37], [-9, 26, -36], "hull")
-ck.append(cube("cockpit_roof", [-10, 25, -35], [10, 27, -27], "hull", {"down": "wall"}))
-ck.append(cube("windscreen", [-9, 15, -39.5], [9, 26, -38.9], "glass", origin=[0, 15, -39], rot=[30, 0, 0]))
-ck.append(cube("windscreen_bar", [-0.5, 15, -39.8], [0.5, 26, -38.8], "hull", origin=[0, 15, -39], rot=[30, 0, 0]))
-ck += pair("windscreen_side", [-10, 15, -39.5], [-9, 26, -36.5], "glass", origin=[-9.5, 15, -39], rot=[30, 0, 0])
-ck.append(cube("nose_box", [-8, 6, -44], [8, 14, -38], "hull", {"down": "belly"}))
-ck.append(cube("nose_top", [-8, 14, -43], [8, 15.4, -38], "camo"))
-ck.append(cube("nose_tip", [-6.5, 7, -46.5], [6.5, 13.5, -44], "hull", {"north": "glass", "down": "belly"}))
-ck.append(cube("chin_glass", [-7, 8, -44.3], [7, 13.4, -44], "glass"))
-ck += pair("nose_side_glass", [-8.3, 8.5, -43], [-8, 13, -39], "glass")
-ck.append(cube("nose_bumper", [-5, 6.2, -47], [5, 7.2, -44], "belly"))
-# интерьер кабины пилотов
-ck.append(cube("instrument_panel", [-8.5, 13, -38.5], [8.5, 18, -37.5], "panel",
-               {"north": "metal", "up": "metal"}, origin=[0, 13, -38], rot=[-15, 0, 0]))
-ck.append(cube("panel_hood", [-8.5, 18, -39], [8.5, 18.8, -36.5], "metal"))
-ck.append(cube("center_console", [-1.5, 7, -38], [1.5, 12, -30], "metal", {"up": "panel"}))
-ck.append(cube("overhead_panel", [-3, 24, -35], [3, 25, -29], "metal", {"down": "panel"}))
-for side, x in (("L", -4.5), ("R", 4.5)):
-    ck.append(cube(f"pilot_seat_base_{side}", [x - 2.2, 7, -34], [x + 2.2, 10, -30], "metal"))
-    ck.append(cube(f"pilot_seat_cushion_{side}", [x - 2.4, 10, -34.5], [x + 2.4, 11, -29.5], "leather"))
-    ck.append(cube(f"pilot_seat_back_{side}", [x - 2.4, 11, -30], [x + 2.4, 19, -28.8], "leather",
-                   origin=[x, 11, -29.5], rot=[12, 0, 0]))
-    ck.append(cube(f"pilot_headrest_{side}", [x - 1.4, 19, -29], [x + 1.4, 21, -28], "leather",
-                   origin=[x, 11, -29.5], rot=[12, 0, 0]))
-    ck.append(cube(f"cyclic_stick_{side}", [x - 0.3, 7, -36.3], [x + 0.3, 12.5, -35.7], "metal",
-                   origin=[x, 7, -36], rot=[-10, 0, 0]))
-    ck.append(cube(f"cyclic_grip_{side}", [x - 0.5, 12.3, -37.4], [x + 0.5, 13.6, -36.4], "leather"))
-    ck.append(cube(f"collective_{side}", [x - (2.9 if x < 0 else -2.9) - 0.3, 8, -33],
-                   [x - (2.9 if x < 0 else -2.9) + 0.3, 8.6, -28], "metal", origin=[x, 8, -28], rot=[-20, 0, 0]))
-    ck.append(cube(f"pedals_{side}", [x - 1.8, 7, -38.4], [x + 1.8, 8.2, -37.8], "metal"))
-ck.append(cube("engineer_seat", [-2, 13, -27.9], [2, 13.8, -25.8], "canvas"))
-ck.append(cube("radio_rack", [5, 7, -28.5], [9, 16, -27], "metal", {"south": "panel"}))
+ck.append(cube("instrument_panel", [-7.8, 13, -41.0], [7.8, 18.4, -40.2], "metal", {"south": "panel"},
+               origin=[0, 13, -40.6], rot=[-18, 0, 0]))
+ck.append(cube("panel_hood", [-8, 18.2, -41.8], [8, 19.0, -39.0], "leather", origin=[0, 18.6, -40.4], rot=[-8, 0, 0]))
+ck.append(cube("center_console", [-1.6, 7, -40], [1.6, 12, -31], "metal", {"up": "panel"}))
+ck.append(cube("overhead_panel", [-3, 25.2, -36], [3, 26.2, -29], "metal", {"down": "panel"}))
+for side, x in (("L", -4.6), ("R", 4.6)):
+    ck.append(cube(f"seat_base_{side}", [x - 2.1, 7, -34.5], [x + 2.1, 10, -30.5], "metal"))
+    ck.append(cube(f"seat_cushion_{side}", [x - 2.4, 10, -35], [x + 2.4, 11.2, -30], "leather"))
+    ck.append(cube(f"seat_back_{side}", [x - 2.4, 11, -30.4], [x + 2.4, 19.5, -29.2], "leather",
+                   origin=[x, 11, -29.8], rot=[12, 0, 0]))
+    ck.append(cube(f"headrest_{side}", [x - 1.5, 19.3, -29.6], [x + 1.5, 21.4, -28.6], "leather",
+                   origin=[x, 11, -29.8], rot=[12, 0, 0]))
+    ck += rod(f"cyclic_{side}", (x, 7, -35.5), (x, 13, -37), 0.28, "metal")
+    ck.append(cube(f"cyclic_grip_{side}", [x - 0.5, 12.8, -37.6], [x + 0.5, 14.3, -36.6], "leather"))
+    ck += rod(f"collective_{side}", (x - 3.0 if x < 0 else x + 3.0, 8, -30), (x - 3.0 if x < 0 else x + 3.0, 10, -34), 0.25, "metal")
+    ck.append(cube(f"pedals_{side}", [x - 1.9, 7, -39.6], [x + 1.9, 8.2, -39.0], "metal", origin=[x, 7, -39.3], rot=[-30, 0, 0]))
+ck.append(cube("engineer_seat", [-2, 13, -28.6], [2, 13.8, -26.4], "canvas"))
+ck.append(cube("radio_rack", [5, 7, -28.9], [9, 16, -27.6], "metal", {"south": "panel"}))
 
-# --- Интерьер грузовой кабины ---
+# ---------------------------------------------------------------------------
+# Интерьер грузовой кабины
+# ---------------------------------------------------------------------------
 cab = []
-cab.append(cube("bench_L_seat", [-10, 12, -12], [-6, 13, 21], "canvas"))
-cab.append(cube("bench_L_back", [-10, 14, -12], [-9.4, 21, 21], "canvas"))
-cab.append(cube("bench_R_seat", [6, 12, -24], [10, 13, 21], "canvas"))
-cab.append(cube("bench_R_back", [9.4, 14, -24], [10, 21, 21], "canvas"))
-for z in range(-10, 22, 8):
-    cab.append(cube("bench_L_leg", [-7, 7, z], [-6.4, 12, z + 0.6], "chrome"))
-for z in range(-22, 22, 8):
-    cab.append(cube("bench_R_leg", [6.4, 7, z], [7, 12, z + 0.6], "chrome"))
-cab += pair("roof_handrail", [-6, 25, -24], [-5.5, 25.5, 22], "chrome")
-cab += pair("floor_rail", [-4.5, 7, -25], [-3.5, 7.3, 23], "metal")
+cab.append(cube("bench_L_seat", [-9.8, 11.6, -12], [-6, 12.4, 20], "canvas"))
+cab.append(cube("bench_L_back", [-10.2, 13, -12], [-9.6, 21, 20], "canvas"))
+cab.append(cube("bench_R_seat", [6, 11.6, -24], [9.8, 12.4, 20], "canvas"))
+cab.append(cube("bench_R_back", [9.6, 13, -24], [10.2, 21, 20], "canvas"))
+for z in range(-10, 21, 6):
+    cab += rod("bench_L_leg", (-6.6, 7, z), (-6.6, 11.6, z), 0.25, "chrome")
+for z in range(-22, 21, 6):
+    cab += rod("bench_R_leg", (6.6, 7, z), (6.6, 11.6, z), 0.25, "chrome")
+cab += rod("roof_rail_L", (-6, 26.4, -25), (-6, 26.4, 20), 0.25, "chrome")
+cab += rod("roof_rail_R", (6, 26.4, -25), (6, 26.4, 20), 0.25, "chrome")
+cab += rod("floor_rail_L", (-4, 7.1, -26), (-4, 7.1, 20), 0.25, "metal")
+cab += rod("floor_rail_R", (4, 7.1, -26), (4, 7.1, 20), 0.25, "metal")
 for z in (-18, -2, 14):
-    cab.append(cube("cabin_lamp", [-1, 26.2, z], [1, 27, z + 2], "chrome"))
-cab.append(cube("cable_run", [-9.8, 25.5, -25], [-9.2, 26.5, 23], "cable"))
-cab.append(cube("heater_duct", [8, 23.5, -25], [9.8, 25.5, 23], "metal"))
-cab.append(cube("aux_fuel_tank", [1, 7, -24], [6, 13, -16], "hull", {"up": "metal"}))
-cab.append(cube("aux_fuel_tank_strap", [0.8, 7, -20.5], [6.2, 13.2, -19.5], "metal"))
-cab.append(cube("crate_big", [-6, 7, 12], [0, 13, 20], "crate"))
+    cab += disc("cabin_lamp", (0, 27.3, z), (0, 1, 0), 1.1, 0.6, "chrome")
+cab += rod("cable_run", (-8.8, 24.4, -26), (-8.8, 24.4, 20), 0.4, "cable")
+cab += rod("heater_duct", (8.6, 23.4, -26), (8.6, 23.4, 20), 0.9, "metal")
+_aux = []
+tube("aux_fuel_tank", [(3.5, 10.5, -25.5), (3.5, 10.5, -24.8), (3.5, 10.5, -16.2), (3.5, 10.5, -15.5)],
+     [(1.8, 2.2), (2.6, 3.2), (2.6, 3.2), (1.8, 2.2)], 12, _aux, "hull", "hull")
+cab += _aux
+cab.append(cube("crate_big", [-6, 7, 12], [0, 13, 19.5], "crate"))
 cab.append(cube("crate_small", [-5, 13, 14], [-1, 17, 18], "crate", origin=[-3, 13, 16], rot=[0, 15, 0]))
-cab.append(cube("ammo_box_1", [1.5, 7, 16], [5.5, 10, 22], "ammo"))
-cab.append(cube("ammo_box_2", [2, 10, 17], [5, 12.5, 21], "ammo", origin=[3.5, 10, 19], rot=[0, -20, 0]))
+cab.append(cube("ammo_box_1", [1.5, 7, 14], [5.5, 10, 19.5], "ammo"))
+cab.append(cube("ammo_box_2", [2, 10, 15], [5, 12.5, 19], "ammo", origin=[3.5, 10, 17], rot=[0, -20, 0]))
 cab.append(cube("ammo_box_open", [-8, 7, -6], [-4, 9.5, -2], "ammo", {"up": "soot"}))
-cab.append(cube("fire_extinguisher", [7, 7, -25.6], [8.6, 13, -24.2], "red"))
-cab.append(cube("first_aid", [9.2, 20, -12], [10, 23, -8], "red"))
+_ext = []
+tube("fire_extinguisher", [(7.8, 7.1, -25.2), (7.8, 12.5, -25.2), (7.8, 13.2, -25.2)], [0.8, 0.8, 0.4], 8, _ext, "red", "red",
+     ref=(1, 0, 0))
+cab += _ext
+cab.append(cube("first_aid", [9.3, 20, -12], [10.2, 23, -8], "red"))
 cab.append(cube("stretcher", [-2, 7.3, -8], [3, 7.9, 8], "canvas", origin=[0, 7, 0], rot=[0, 10, 0]))
-cab.append(cube("helmet", [-8.6, 13, 2], [-7, 14.2, 3.6], "hull"))
-cab.append(cube("moss_patch_floor", [-10, 7, 19], [-5, 7.2, 24], "moss"))
+cab.append(cube("helmet", [-8.6, 12.4, 2], [-7, 13.6, 3.6], "hull"))
+cab.append(cube("moss_patch", [-8, 7.02, 15], [-3, 7.2, 20], "moss"))
 cab.append(cube("debris_panel", [3, 7, -4], [7, 7.4, 1], "rust", origin=[5, 7, -1.5], rot=[0, 30, 8]))
 
-# --- Двигатели и редуктор ---
+# ---------------------------------------------------------------------------
+# Мотогондола (двигатели), воздухозаборники, выхлоп, редуктор
+# ---------------------------------------------------------------------------
+NAC = [(-38.5, 8.0, 34.4, 3.4), (-36.0, 8.6, 36.0, 3.5), (-30.0, 8.8, 36.8, 3.5), (-10.0, 8.8, 37.0, 3.5),
+       (0.0, 8.4, 36.5, 3.2), (6.0, 7.6, 35.2, 3.0), (12.0, 6.4, 33.4, 2.8), (18.0, 4.8, 31.2, 2.6),
+       (23.0, 3.0, 29.6, 2.4), (26.0, 1.2, 28.9, 2.2)]
+NAC_Y0 = 24.0
+NAC_PROF = make_profile([(z, a, 2 * NAC_Y0 - t, t, n, n) for z, a, t, n in NAC])
+NAC_Z = [-38.5, -37.2, -36.0, -33, -30.0, -25, -20, -15, -10.0, -5, 0.0, 3, 6.0, 9, 12.0, 15, 18.0, 20.5, 23.0, 24.5, 26.0]
+NN = 18
+NAC_TH = arc_thetas(NN, -10.0, NAC_PROF, -math.pi / 2, math.pi / 2, closed=False)
+REG_N = (192, 0, 64, 64, -38.5, 26.0)
+
+
+def nac_uv(i, k):
+    u0, v0, w, h, za, zb = REG_N
+    return [u0 + w * k / NN, v0 + h * (NAC_Z[i] - za) / (zb - za),
+            u0 + w * (k + 1) / NN, v0 + h * (NAC_Z[i + 1] - za) / (zb - za)]
+
+
 eng = []
-eng.append(cube("engine_housing", [-8, 28, -35], [8, 35, 4], "camo", {"north": "grille"}))
-eng.append(cube("engine_top", [-7, 35, -33], [7, 36, 2], "hull"))
-eng += pair("engine_side_bevel", [-8.8, 29, -35], [-7.8, 34, 4], "hull", origin=[-8, 34, 0], rot=[0, 0, 20])
-eng.append(cube("engine_front_slope", [-8, 27, -38], [8, 28.5, -34], "hull"))
-eng.append(cube("engine_tail_1", [-6, 28, 4], [6, 33, 14], "camo"))
-eng.append(cube("engine_tail_2", [-4, 28, 14], [4, 30.5, 24], "camo"))
-for side, xc in (("L", -4.5), ("R", 4.5)):
-    eng.append(cube(f"intake_{side}", [xc - 3, 28.5, -39], [xc + 3, 34.5, -34], "hull", {"north": "soot"}))
-    eng.append(cube(f"intake_ring_{side}", [xc - 2.6, 28.9, -38.8], [xc + 2.6, 34.1, -34], "hull",
-                    {"north": "soot"}, origin=[xc, 31.5, -36], rot=[0, 0, 45]))
-    eng.append(cube(f"intake_cone_{side}", [xc - 1, 30.5, -40], [xc + 1, 32.5, -38], "metal"))
-eng += pair("exhaust_pipe", [-13, 29, -7], [-8, 33.5, -1], "hull", {"south": "soot", "west": "rust"},
-            origin=[-8, 31, -4], rot=[0, -30, 0])
-eng += pair("exhaust_soot", [-12.6, 29.4, -1.2], [-8.4, 33.1, -0.8], "soot", origin=[-8, 31, -4], rot=[0, -30, 0])
-eng.append(cube("gearbox_fairing", [-5, 36, -19], [5, 38, -7], "hull"))
-eng.append(cube("fan_intake", [-3, 36, -6], [3, 39, 1], "hull", {"north": "grille"}))
-eng.append(cube("rotor_mast", [-1.2, 38, -14.2], [1.2, 41, -11.8], "metal"))
-eng.append(cube("swashplate", [-2.2, 39.2, -15.2], [2.2, 40, -10.8], "metal"))
+nrings = [[se_point(z, th, NAC_PROF) for th in NAC_TH] for z in NAC_Z]
+loft("nacelle", nrings, [(0, NAC_Y0, z) for z in NAC_Z], 0.5, lambda i, k, c: nac_uv(i, k),
+     lambda i, k, c: eng, closed=False, inner="interior_dark")
 
-# --- Топливные баки ---
+
+def paint_nacelle():
+    u0, v0, w, h, za, zb = REG_N
+    for py in range(h):
+        z = za + (zb - za) * (py + 0.5) / h
+        for px in range(w):
+            th = lerp(-math.pi / 2, math.pi / 2, (px + 0.5) / w)
+            x, y, _ = se_point(z, th, NAC_PROF)
+            c = camo_color(z + 500, x * 1.4, 13)
+            # жалюзи на боковых капотах
+            if abs(x) > 5.5 and 28.5 < y < 33.5 and (-30 < z < -12) and int(z * 1.3) % 2 == 0:
+                c = (26, 26, 24)
+            if abs(z - (-20.5)) < 0.5 or abs(z - (-4)) < 0.5 or abs(z - 10) < 0.5:
+                c = shade(c, 0.72)
+            if abs(x) < 0.3:
+                c = shade(c, 0.8)
+            if z > -4 and abs(x) > 4:
+                c = mix(c, (30, 28, 26), min(0.8, math.exp(-(z + 4) / 18) * 0.9))
+            put(u0 + px, v0 + py, c)
+
+
+paint_nacelle()
+cap("nacelle_front", -38.3, 0.5, eng, "hull", prof=NAC_PROF, rows=10)
+for side, xc in (("L", -4.3), ("R", 4.3)):
+    intake = []
+    tube(f"intake_{side}", [(xc, 31.2, -38.2), (xc, 31.2, -41.0), (xc, 31.2, -42.8), (xc, 31.2, -43.3)],
+         [3.1, 3.2, 3.35, 3.0], 16, intake, "hull", "soot", t=0.5)
+    intake += disc(f"intake_fan_{side}", (xc, 31.2, -40.5), (0, 0, 1), 3.0, 0.3, "soot", "intake")
+    intake += disc(f"intake_cone_{side}", (xc, 31.2, -41.6), (0, 0, 1), 1.1, 1.8, "metal")
+    intake += disc(f"intake_cone_tip_{side}", (xc, 31.2, -42.6), (0, 0, 1), 0.6, 0.6, "metal")
+    eng += intake
+for sgn in (-1, 1):
+    s = "L" if sgn < 0 else "R"
+    ex = []
+    tube(f"exhaust_{s}", [(sgn * 7.0, 30.6, -9.0), (sgn * 10.2, 30.6, -7.0), (sgn * 13.0, 30.3, -3.0),
+                          (sgn * 14.3, 30.0, 1.5), (sgn * 14.8, 29.9, 4.0)],
+         [2.1, 2.2, 2.3, 2.5, 2.7], 14, ex, "exhaust", "soot", t=0.4)
+    eng += ex
+    eng += disc(f"exhaust_soot_{s}", (sgn * 14.4, 30.0, 2.2), (0.15 * sgn, 0, 1), 2.1, 0.2, "soot")
+_gb = []
+tube("gearbox_fairing", [(0, 35.8, -13), (0, 37.6, -13), (0, 39.0, -13), (0, 39.8, -13)],
+     [(5.6, 6.6), (5.2, 6.0), (3.6, 4.2), (1.6, 1.8)], 16, _gb, "hull", "interior_dark", ref=(1, 0, 0))
+eng += _gb
+_fan = []
+tube("fan_intake", [(0, 37.2, -6.2), (0, 37.2, -3.5), (0, 36.8, -0.5)], [2.9, 2.9, 2.6], 14, _fan, "hull", "soot")
+eng += _fan
+eng += disc("fan_grille", (0, 37.2, -5.8), (0, 0, 1), 2.7, 0.2, "metal", "intake")
+_mast = []
+tube("rotor_mast", [(0, 39.4, -13), (0, 41.6, -13)], [1.25, 1.1], 10, _mast, "metal", "metal", ref=(1, 0, 0))
+eng += _mast
+eng += disc("swashplate", (0, 40.3, -13), (0, 1, 0), 3.0, 0.7, "metal")
+
+# ---------------------------------------------------------------------------
+# Топливные баки (капсулы) и хвостовое оперение
+# ---------------------------------------------------------------------------
 tanks = []
-tanks.append(cube("fuel_tank_L", [-15.5, 8, -13], [-11, 14, 8], "hull", {"down": "belly"}))
-tanks.append(cube("fuel_tank_L_front", [-15, 8.5, -15], [-11.5, 13.5, -13], "hull"))
-tanks.append(cube("fuel_tank_L_rear", [-15, 8.5, 8], [-11.5, 13.5, 10], "hull"))
-tanks.append(cube("fuel_tank_R", [11, 8, -20], [15.5, 14, 8], "hull", {"down": "belly"}))
-tanks.append(cube("fuel_tank_R_front", [11.5, 8.5, -22], [15, 13.5, -20], "hull"))
-tanks.append(cube("fuel_tank_R_rear", [11.5, 8.5, 8], [15, 13.5, 10], "hull"))
+
+
+def fuel_tank(name, x, z0, z1, rx, ry, yc):
+    n = 10
+    zs, rs = [], []
+    for i in range(n + 1):
+        f = i / n
+        z = lerp(z0, z1, f)
+        e = abs(2 * f - 1)
+        k = (max(0.0, 1 - e ** 5)) ** 0.5
+        zs.append((x, yc, z))
+        rs.append((max(0.25, rx * k), max(0.25, ry * k)))
+    tube(name, zs, rs, 16, tanks, "hull", "interior_dark", t=0.4, ref=(1, 0, 0))
+
+
+fuel_tank("fuel_tank_L", -13.4, -16, 10, 2.4, 3.1, 11.0)
+fuel_tank("fuel_tank_R", 13.4, -23, 10, 2.4, 3.1, 11.0)
 for z in (-8, 2):
-    tanks += pair("tank_strap", [-15.7, 7.8, z], [-11, 14.2, z + 0.8], "metal")
-tanks.append(cube("tank_strap_R_front", [11, 7.8, -16], [15.7, 14.2, -15.2], "metal"))
+    tanks += rod("tank_strap_L", (-11, 14.4, z), (-15.9, 11, z), 0.25, "metal")
+    tanks += rod("tank_strap_R", (11, 14.4, z), (15.9, 11, z), 0.25, "metal")
+tanks += rod("tank_strap_R2", (11, 14.4, -15), (15.9, 11, -15), 0.25, "metal")
 
-# --- Хвостовая балка ---
 tail = []
-boom = [(-6, 18, 32, 6, 27, 44), (-5, 19, 44, 5, 26.5, 58), (-4, 20, 58, 4, 26, 74),
-        (-3, 21, 74, 3, 25.5, 90), (-2.5, 21.5, 90, 2.5, 25, 101)]
-for i, b in enumerate(boom):
-    tail.append(cube(f"tail_boom_{i}", b[:3], b[3:], "camo" if i % 2 else "hull", {"down": "belly"}))
-tail.append(cube("boom_rear_ramp", [-8, 16, 24], [8, 22, 34], "hull", {"down": "belly"}, origin=[0, 16, 30], rot=[-25, 0, 0]))
-tail.append(cube("driveshaft_cover", [-1, 26.5, 32], [1, 28, 96], "metal"))
-tail += pair("stabilizer", [-12, 22, 84], [-2.5, 22.8, 91], "hull")
-tail += pair("stabilizer_tip", [-12.5, 21.6, 84.5], [-12, 23.2, 90.5], "warn")
-tail.append(cube("tail_skid_strut", [-0.4, 16, 90], [0.4, 21.5, 91], "metal", origin=[0, 21.5, 90.5], rot=[-20, 0, 0]))
-tail.append(cube("tail_skid_pad", [-1, 15.2, 91], [1, 16.2, 94], "metal"))
-tail.append(cube("tail_fin", [-1, 23, 95], [1, 42, 101], "camo", origin=[0, 24, 98], rot=[30, 0, 0]))
-tail.append(cube("tail_fin_root", [-1.8, 21.5, 94], [1.8, 26, 103], "hull"))
-tail.append(cube("tail_gearbox", [-1.2, 36.5, 103.5], [2, 39.5, 107.5], "metal"))
-tail.append(cube("tail_light", [-0.5, 39.5, 106], [0.5, 40.3, 107], "chrome"))
-tail += pair("star_boom", [-5.2, 20, 47], [-5, 26, 53], "star")
-tail += pair("star_fairing", [-10.2, 21, 25], [-10, 27, 31], "star")
-tail.append(cube("number_L", [-11.25, 22, 5], [-11.05, 26, 13], "number"))
-tail.append(cube("number_R", [11.05, 22, 16], [11.25, 26, 24], "number"))
-tail.append(cube("number_boom", [-4.2, 21, 62], [-4, 24.5, 69], "number"))
+# киль (профиль крыла, наклон 30° назад)
+FIN_ROOT, FIN_DIR = (0, 21.6, 97.0), (0, math.cos(math.radians(30)), math.sin(math.radians(30)))
+fin_path = [add(FIN_ROOT, mul(FIN_DIR, s)) for s in (0, 5, 10, 15, 18.5, 19.6)]
+tube("tail_fin", fin_path, [(1.3, 7.0), (1.15, 6.2), (1.0, 5.3), (0.9, 4.5), (0.8, 3.8), (0.35, 2.2)], 12, tail,
+     "hull", "interior_dark", t=0.35, ref=(1, 0, 0))
+# стабилизаторы
+for sgn in (-1, 1):
+    s = "L" if sgn < 0 else "R"
+    stab = [(sgn * x, 22.8, 91.5) for x in (2.0, 5, 9, 12.2, 12.7)]
+    tube(f"stabilizer_{s}", stab, [(0.55, 3.6), (0.5, 3.4), (0.45, 3.0), (0.4, 2.7), (0.15, 1.6)], 10, tail,
+         "hull", "interior_dark", t=0.25, ref=(0, 1, 0))
+    tail += disc(f"stab_tip_{s}", (sgn * 12.4, 22.8, 91.5), (1, 0, 0), 1.2, 0.4, "warn")
+tail += rod("tail_skid_strut", (0, 21.3, 90), (0, 16.5, 92.5), 0.35, "metal")
+tail += rod("tail_skid_pad", (0, 16.2, 91.2), (0, 16.2, 95.2), 0.5, "metal")
+tail += rod("driveshaft_cover", (0, 26.9, 38), (0, 25.4, 96), 0.9, "metal")
+TR = (2.6, 37.3, 107.8)
+_tg = []
+tube("tail_gearbox", [(-0.8, TR[1], TR[2]), (0.8, TR[1], TR[2]), (2.0, TR[1], TR[2])], [(1.9, 2.2), (1.9, 2.2), (1.2, 1.2)],
+     12, _tg, "metal", "metal", ref=(0, 1, 0))
+tail += _tg
+tail += disc("tail_light", (0, 39.8, 109.5), (0, 0, 1), 0.5, 0.6, "chrome")
 
-# --- Главный несущий винт (5 лопастей) ---
-HUB = [0, 41, -13]
-rotor_children = [
-    cube("rotor_hub", [-2.6, 41, -15.6], [2.6, 43, -10.4], "metal"),
-    cube("rotor_hub_cap", [-1.5, 43, -14.5], [1.5, 44.2, -11.5], "metal"),
-    cube("rotor_hub_ring", [-2.2, 41.2, -15.2], [2.2, 42.8, -10.8], "metal", origin=HUB, rot=[0, 36, 0]),
-]
+# ---------------------------------------------------------------------------
+# Несущий винт (5 лопастей) и рулевой винт (3 лопасти)
+# ---------------------------------------------------------------------------
+HUB = (0, 42.4, -13)
+rotor_children = []
+rotor_children += disc("hub_plate_low", (0, 41.9, -13), (0, 1, 0), 3.2, 1.0, "metal")
+rotor_children += disc("hub_plate_high", (0, 43.1, -13), (0, 1, 0), 2.6, 1.2, "metal")
+rotor_children += disc("hub_cap", (0, 44.1, -13), (0, 1, 0), 1.4, 0.9, "metal")
 for k in range(5):
-    blade = [
-        cube(f"blade{k}_cuff", [2.5, 41.2, -14.2], [9, 42.6, -11.8], "metal"),
-        cube(f"blade{k}_damper", [2.5, 42.6, -13.6], [6, 43.4, -12.4], "metal"),
-        cube(f"blade{k}", [9, 41.6, -15], [84, 42.2, -11], "blade", {"up": "bladestrip", "down": "bladestrip"}),
-        cube(f"blade{k}_tip", [84, 41.6, -15], [88, 42.2, -11], "warn"),
-    ]
+    blade = []
+    blade += rod(f"blade{k}_hinge", (2.4, 42.4, -13), (8.5, 42.4, -13), 0.8, "metal")
+    blade += rod(f"blade{k}_damper", (2.4, 43.4, -12.2), (7, 43.2, -12.2), 0.35, "chrome")
+    blade.append(cube(f"blade{k}", [8.5, 42.1, -15.1], [84, 42.65, -11.1], "bladeedge",
+                      {"up": "bladestrip", "down": "bladestrip"}))
+    blade.append(cube(f"blade{k}_te", [8.5, 42.2, -11.1], [84, 42.5, -10.5], "bladeedge"))
+    blade.append(cube(f"blade{k}_tip", [84, 42.1, -15.1], [88, 42.65, -11.1], "warn"))
     rotor_children.append(group(f"blade_{k}", HUB, blade, rotation=[0, k * 72, 0]))
 main_rotor = group("main_rotor", HUB, rotor_children)
 
-# --- Рулевой (хвостовой) винт, справа на киле, 3 лопасти ---
-TR = [2.5, 38, 105.5]
-tr_children = [cube("tail_rotor_hub", [2, 37, 104.5], [4, 39, 106.5], "metal"),
-               cube("tail_rotor_cap", [4, 37.4, 104.9], [4.8, 38.6, 106.1], "metal")]
+tr_children = disc("tail_rotor_hub", (3.0, TR[1], TR[2]), (1, 0, 0), 1.3, 1.4, "metal")
+tr_children += disc("tail_rotor_cap", (3.9, TR[1], TR[2]), (1, 0, 0), 0.7, 0.8, "metal")
 for k in range(3):
     tr_children.append(group(f"tr_blade_{k}", TR, [
-        cube(f"tr_blade{k}", [2.8, 39, 104.9], [3.3, 51, 106.1], "blade"),
-        cube(f"tr_blade{k}_tip", [2.8, 51, 104.9], [3.3, 54, 106.1], "warn"),
+        cube(f"tr_blade{k}", [2.8, TR[1] + 1.2, TR[2] - 1.15], [3.3, TR[1] + 13.5, TR[2] + 1.15], "bladeedge",
+             {"east": "bladestrip", "west": "bladestrip"}),
+        cube(f"tr_blade{k}_tip", [2.8, TR[1] + 13.5, TR[2] - 1.15], [3.3, TR[1] + 16, TR[2] + 1.15], "warn"),
     ], rotation=[k * 120, 0, 0]))
 tail_rotor = group("tail_rotor", TR, tr_children)
 tail.append(tail_rotor)
 
-# --- Шасси ---
+# ---------------------------------------------------------------------------
+# Шасси: круглые колёса (тор из панелей + боковины-диски)
+# ---------------------------------------------------------------------------
 
 
 def wheel(name, c, r, w):
-    x0, x1 = c[0] - w / 2, c[0] + w / 2
-    s = r * 0.83
-    return [cube(name, [x0, c[1] - s, c[2] - s], [x1, c[1] + s, c[2] + s], "tire"),
-            cube(name + "_oct", [x0, c[1] - s, c[2] - s], [x1, c[1] + s, c[2] + s], "tire",
-                 origin=list(c), rot=[45, 0, 0]),
-            cube(name + "_hub", [x0 - 0.2, c[1] - r * 0.4, c[2] - r * 0.4],
-                 [x1 + 0.2, c[1] + r * 0.4, c[2] + r * 0.4], "chrome")]
+    out = []
+    x = c[0]
+    prof = [(-w / 2, r * 0.8), (-w * 0.36, r * 0.96), (-w * 0.12, r), (w * 0.12, r), (w * 0.36, r * 0.96), (w / 2, r * 0.8)]
+    tube(name, [(x + dx, c[1], c[2]) for dx, _ in prof], [rr for _, rr in prof], 20, out, "tire", "tireside",
+         t=0.5, ref=(0, 1, 0), edge="tire")
+    for sgn in (-1, 1):
+        out += disc(f"{name}_side", (x + sgn * (w / 2 - 0.1), c[1], c[2]), (1, 0, 0), r * 0.82, 0.3, "tireside")
+        out += disc(f"{name}_rim", (x + sgn * (w / 2 + 0.05), c[1], c[2]), (1, 0, 0), r * 0.5, 0.35, "chrome")
+        out += disc(f"{name}_hub", (x + sgn * (w / 2 + 0.3), c[1], c[2]), (1, 0, 0), r * 0.22, 0.4, "metal")
+    return out
 
 
-def main_gear(sign):
-    s = "L" if sign < 0 else "R"
-    X = lambda a, b: (min(sign * a, sign * b), max(sign * a, sign * b))
-    parts = wheel(f"wheel_main_{s}", [sign * 17, 4, 2], 4, 3)
-    xa, xb = X(16.5, 17.5)
-    parts.append(cube(f"oleo_{s}", [xa, 4, 1.5], [xb, 15, 2.5], "chrome"))
-    xa, xb = X(11, 17.5)
-    parts.append(cube(f"brace_top_{s}", [xa, 14, 1.4], [xb, 15.2, 2.6], "metal"))
-    xa, xb = X(11, 16.5)
-    parts.append(cube(f"brace_low_{s}", [xa, 3.6, 1.4], [xb, 4.6, 2.6], "metal"))
-    parts.append(cube(f"brace_diag_{s}", [xa, 3.6, -5], [xb, 4.6, -4], "metal",
-                      origin=[sign * 16.5, 4, 2], rot=[0, -sign * 38, 0]))
-    return group(f"gear_main_{s}", [sign * 17, 15, 2], parts)
+def main_gear(sgn):
+    s = "L" if sgn < 0 else "R"
+    parts = wheel(f"wheel_main_{s}", (sgn * 17.6, 4.3, 1.5), 4.3, 3.2)
+    parts += rod(f"axle_{s}", (sgn * 15.6, 4.3, 1.5), (sgn * 16.2, 4.3, 1.5), 0.6, "metal")
+    parts += rod(f"oleo_low_{s}", (sgn * 15.9, 4.3, 1.5), (sgn * 14.3, 11, 1.5), 0.55, "chrome")
+    parts += rod(f"oleo_up_{s}", (sgn * 14.6, 9.8, 1.5), (sgn * 11.4, 17.2, 1.5), 0.85, "metal")
+    parts += rod(f"brace_front_{s}", (sgn * 15.8, 4.3, 1.5), (sgn * 6.0, 5.4, -4.0), 0.4, "metal")
+    parts += rod(f"brace_rear_{s}", (sgn * 15.8, 4.3, 1.5), (sgn * 6.0, 5.4, 7.0), 0.4, "metal")
+    return group(f"gear_main_{s}", (sgn * 11.4, 17.2, 1.5), parts)
 
 
-gear_nose = group("gear_nose", [0, 7, -38], [
-    cube("nose_strut", [-0.5, 3.4, -38.5], [0.5, 7, -37.5], "chrome"),
-    cube("nose_fork", [-2.6, 3.2, -38.4], [2.6, 4, -37.6], "metal"),
-    *wheel("wheel_nose_L", [-1.8, 3.5, -38], 3.4, 1.8),
-    *wheel("wheel_nose_R", [1.8, 3.5, -38], 3.4, 1.8),
+nose = []
+nose += rod("nose_strut", (0, 3.4, -40.2), (0, 6.2, -41.6), 0.45, "chrome")
+nose += rod("nose_axle", (-2.9, 3.3, -40.2), (2.9, 3.3, -40.2), 0.35, "metal")
+nose += wheel("wheel_nose_L", (-1.95, 3.3, -40.2), 3.2, 1.8)
+nose += wheel("wheel_nose_R", (1.95, 3.3, -40.2), 3.2, 1.8)
+gear_nose = group("gear_nose", (0, 6.2, -41.6), nose)
+
+# ---------------------------------------------------------------------------
+# Двери
+# ---------------------------------------------------------------------------
+side_door = group("side_door", (-11.5, 7, -24), side_door_panels + [
+    cube("side_door_handle", [-11.9, 15, -17], [-11.4, 15.8, -15.8], "chrome"),
+    cube("side_door_handle_in", [-10.4, 15, -17], [-9.9, 15.8, -15.8], "chrome"),
+    decal("side_door_window", -1, -19.5, 19.5, 3.6, 3.6, "porthole", offset=0.06),
 ])
-
-# --- Двери ---
-side_door = group("side_door", [-11.5, 7, -24], [
-    cube("side_door_panel", [-11.2, 7, -24], [-10.2, 24, -15], "hull", {"west": "door", "east": "wall"}),
-    cube("side_door_handle_in", [-10.2, 15, -16.5], [-9.8, 16, -15.6], "chrome"),
-    cube("side_door_roller", [-11.6, 23.4, -23.6], [-11.2, 24.4, -22.6], "metal"),
+cockpit_door = group("cockpit_door", (3, 7, -27.2), [
+    cube("cockpit_door_panel", [-3, 7, -27.5], [3, 23.2, -26.9], "wall"),
+    cube("cockpit_door_window", [-1.5, 17, -27.6], [1.5, 20, -26.8], "porthole"),
+    cube("cockpit_door_handle", [-2.6, 14, -26.8], [-1.8, 14.6, -26.4], "chrome"),
 ])
-cockpit_door = group("cockpit_door", [3, 7, -26.5], [
-    cube("cockpit_door_panel", [-3, 7, -26.8], [3, 23, -26.2], "wall"),
-    cube("cockpit_door_window", [-1.5, 17, -26.9], [1.5, 20, -26.1], "porthole"),
-    cube("cockpit_door_handle", [-2.6, 14, -26.1], [-1.8, 14.6, -25.7], "chrome"),
-])
-
-
-def rear_door(sign):
-    s = "L" if sign < 0 else "R"
-    X = lambda a, b: (min(sign * a, sign * b), max(sign * a, sign * b))
-    xa, xb = X(10, 11)
-    side = cube(f"rear_door_side_{s}", [xa, 7, 24], [xb, 20, 29], "rear",
-                {("east" if sign < 0 else "west"): "wall"})
-    xa, xb = X(0, 11)
-    back = cube(f"rear_door_back_{s}", [xa, 7, 29], [xb, 20, 30], "rear", {"north": "wall"})
-    xa, xb = X(0.2, 10)
-    bottom = cube(f"rear_door_bottom_{s}", [xa, 7, 28], [xb, 8, 29], "hull")
-    xa, xb = X(1, 3)
-    handle = cube(f"rear_door_handle_{s}", [xa, 12, 30], [xb, 12.6, 30.4], "chrome")
-    return group(f"rear_door_{s}", [sign * 11, 7, 24], [side, back, bottom, handle])
-
-
-rear_L, rear_R = rear_door(-1), rear_door(1)
+rear_L = group("rear_door_L", (-halfwidth(20, 12), 7, 20), rear_L_panels + [
+    cube("rear_door_handle_L", [-4, 13, 29.3], [-2, 13.5, 29.8], "chrome", origin=[-3, 13, 29.5], rot=[0, -20, 0])])
+rear_R = group("rear_door_R", (halfwidth(20, 12), 7, 20), rear_R_panels)
 
 # ---------------------------------------------------------------------------
 # Иерархия
 # ---------------------------------------------------------------------------
-body = group("body", [0, 18, 0], [
-    group("fuselage", [0, 18, 0], fus),
-    group("cockpit", [0, 12, -34], ck),
-    group("cabin_interior", [0, 12, 0], cab),
-    group("engines", [0, 32, -14], eng),
-    group("fuel_tanks", [0, 11, -5], tanks),
-    group("tail", [0, 24, 60], tail),
+body = group("body", (0, 18, 0), [
+    group("fuselage", (0, 18, 0), fus_panels + fus_misc + decals),
+    group("cockpit", (0, 12, -34), ck),
+    group("cabin_interior", (0, 12, 0), cab),
+    group("engines", (0, 32, -14), eng),
+    group("fuel_tanks", (0, 11, -5), tanks),
+    group("tail", (0, 24, 60), tail),
     side_door, cockpit_door, rear_L, rear_R,
 ])
-gear = group("landing_gear", [0, 6, 0], [main_gear(-1), main_gear(1), gear_nose])
-root = group("helicopter", [0, 18, 0], [body, main_rotor, gear])
+gear = group("landing_gear", (0, 6, 0), [main_gear(-1), main_gear(1), gear_nose])
+root = group("helicopter", (0, 18, 0), [body, main_rotor, gear])
 root["isOpen"] = True
 body["isOpen"] = True
 
@@ -651,7 +1133,6 @@ def kf(channel, t, xyz, interp="linear"):
 
 
 def animation(name, length, loop, tracks):
-    """tracks: {bone: {channel: [(t, (x,y,z), interp?), ...]}}"""
     animators = {}
     for bone, chans in tracks.items():
         g = GROUPS[bone]
@@ -665,31 +1146,27 @@ def animation(name, length, loop, tracks):
             "start_delay": "", "loop_delay": "", "animators": animators}
 
 
-def spin(axis, length, turns, t0=0.0):
+def spin(axis, length, turns):
     v = lambda a: tuple(a if i == axis else 0 for i in range(3))
-    return [(t0, v(0)), (t0 + length, v(360 * turns))]
+    return [(0, v(0)), (length, v(360 * turns))]
 
 
-def ramp_spin(axis, t0, t1, max_dps, speed_up=True, start_angle=0.0, step=0.25):
-    """Разгон/торможение винта с постоянным ускорением: ключи каждые step секунд."""
+def ramp_spin(axis, t0, t1, max_dps, speed_up=True, step=0.25):
     pts, dur = [], t1 - t0
     a = max_dps / dur
-    n = int(round(dur / step))
-    for i in range(n + 1):
+    for i in range(int(round(dur / step)) + 1):
         t = i * step
         ang = 0.5 * a * t * t if speed_up else max_dps * t - 0.5 * a * t * t
-        v = tuple(start_angle + ang if j == axis else 0 for j in range(3))
-        pts.append((t0 + t, v))
+        pts.append((t0 + t, tuple(ang if j == axis else 0 for j in range(3))))
     return pts
 
 
-def wave(channel_axis_amp, length, n, phase=0.0, base=(0, 0, 0)):
-    """Плавные колебания: channel_axis_amp = [(axis, amplitude, freq_mult)]."""
+def wave(axes, length, n, phase=0.0, base=(0, 0, 0)):
     pts = []
     for i in range(n + 1):
         t = length * i / n
         v = list(base)
-        for axis, amp, fm in channel_axis_amp:
+        for axis, amp, fm in axes:
             v[axis] += amp * math.sin(2 * math.pi * fm * t / length + phase)
         pts.append((t, tuple(v), "catmullrom"))
     return pts
@@ -697,15 +1174,13 @@ def wave(channel_axis_amp, length, n, phase=0.0, base=(0, 0, 0)):
 
 Z3 = (0, 0, 0)
 FLY_H = 32
+GEAR_DOWN = (0, -0.6, 0)
 anims = [
     animation("rotor_idle", 1.0, "loop", {
         "main_rotor": {"rotation": spin(1, 1.0, 1)},
         "tail_rotor": {"rotation": spin(0, 1.0, 5)},
-        "body": {"position": [(0, Z3), (0.05, (0, 0.06, 0)), (0.1, Z3), (0.15, (0.03, 0.04, 0)),
-                              (0.2, Z3), (0.25, (0, 0.06, 0)), (0.3, Z3), (0.35, (-0.03, 0.04, 0)),
-                              (0.4, Z3), (0.45, (0, 0.06, 0)), (0.5, Z3), (0.55, (0.03, 0.04, 0)),
-                              (0.6, Z3), (0.65, (0, 0.06, 0)), (0.7, Z3), (0.75, (-0.03, 0.04, 0)),
-                              (0.8, Z3), (0.85, (0, 0.06, 0)), (0.9, Z3), (0.95, (0.03, 0.04, 0)), (1.0, Z3)]},
+        "body": {"position": [(i * 0.05, (0.03 * ((i // 2) % 2 * 2 - 1) if i % 4 == 3 else 0, 0.05 if i % 2 else 0, 0))
+                              for i in range(21)]},
     }),
     animation("rotor_startup", 6.0, "hold_on_last_frame", {
         "main_rotor": {"rotation": ramp_spin(1, 0, 6, 360)},
@@ -720,14 +1195,14 @@ anims = [
         "tail_rotor": {"rotation": spin(0, 2.0, 16)},
         "helicopter": {"position": wave([(1, 1.2, 1), (0, 0.4, 1)], 2.0, 8, base=(0, FLY_H, 0)),
                        "rotation": wave([(0, 1.2, 1), (2, 1.5, 1)], 2.0, 8, phase=1.2)},
-        "landing_gear": {"position": [(0, (0, -0.6, 0))]},
+        "landing_gear": {"position": [(0, GEAR_DOWN)]},
     }),
     animation("fly_forward", 2.0, "loop", {
         "main_rotor": {"rotation": spin(1, 2.0, 4)},
         "tail_rotor": {"rotation": spin(0, 2.0, 16)},
         "helicopter": {"position": wave([(1, 0.8, 1)], 2.0, 8, base=(0, FLY_H, 0)),
                        "rotation": wave([(0, 1.0, 1), (2, 1.2, 1)], 2.0, 8, phase=0.7, base=(12, 0, 0))},
-        "landing_gear": {"position": [(0, (0, -0.6, 0))]},
+        "landing_gear": {"position": [(0, GEAR_DOWN)]},
     }),
     animation("takeoff", 5.0, "hold_on_last_frame", {
         "main_rotor": {"rotation": [(0, Z3), (1, (0, 540, 0)), (2, (0, 1260, 0)), (3, (0, 1980, 0)),
@@ -736,8 +1211,8 @@ anims = [
         "helicopter": {"position": [(0, Z3), (1.5, Z3, "catmullrom"), (2.2, (0, 2, 0), "catmullrom"),
                                     (3.5, (0, 16, 0), "catmullrom"), (5, (0, FLY_H, 0), "catmullrom")],
                        "rotation": [(0, Z3), (1.5, Z3, "catmullrom"), (2.2, (-3, 0, 0), "catmullrom"),
-                                    (3.5, (4, 0, 0), "catmullrom"), (5, (0, 0, 0), "catmullrom")]},
-        "landing_gear": {"position": [(0, Z3), (1.5, Z3), (2.2, (0, -0.6, 0))]},
+                                    (3.5, (4, 0, 0), "catmullrom"), (5, Z3, "catmullrom")]},
+        "landing_gear": {"position": [(0, Z3), (1.5, Z3), (2.2, GEAR_DOWN)]},
     }),
     animation("landing", 5.0, "hold_on_last_frame", {
         "main_rotor": {"rotation": [(0, Z3), (1, (0, 720, 0)), (2, (0, 1440, 0)), (3, (0, 2100, 0)),
@@ -748,21 +1223,21 @@ anims = [
                                     (4.2, Z3, "catmullrom"), (5, Z3)],
                        "rotation": [(0, Z3), (1.8, (-5, 0, 0), "catmullrom"), (3.2, (-2, 0, 0), "catmullrom"),
                                     (3.8, (0.8, 0, 0), "catmullrom"), (4.2, Z3, "catmullrom"), (5, Z3)]},
-        "landing_gear": {"position": [(0, (0, -0.6, 0)), (3.6, (0, -0.6, 0)), (3.8, (0, 0.4, 0)), (4.2, Z3)]},
+        "landing_gear": {"position": [(0, GEAR_DOWN), (3.6, GEAR_DOWN), (3.8, (0, 0.4, 0)), (4.2, Z3)]},
     }),
     animation("side_door_open", 1.2, "hold_on_last_frame", {
-        "side_door": {"position": [(0, Z3), (0.3, (1.6, 0, 0), "catmullrom"), (1.2, (1.6, 0, 9.6), "catmullrom")]},
+        "side_door": {"position": [(0, Z3), (0.3, (1.4, 0, 0), "catmullrom"), (1.2, (1.4, 0, 9.4), "catmullrom")]},
     }),
     animation("side_door_close", 1.2, "hold_on_last_frame", {
-        "side_door": {"position": [(0, (1.6, 0, 9.6)), (0.9, (1.6, 0, 0), "catmullrom"), (1.2, Z3, "catmullrom")]},
+        "side_door": {"position": [(0, (1.4, 0, 9.4)), (0.9, (1.4, 0, 0), "catmullrom"), (1.2, Z3, "catmullrom")]},
     }),
     animation("rear_doors_open", 1.6, "hold_on_last_frame", {
-        "rear_door_L": {"rotation": [(0, Z3), (1.6, (0, 110, 0), "catmullrom")]},
-        "rear_door_R": {"rotation": [(0, Z3), (0.2, Z3), (1.6, (0, -110, 0), "catmullrom")]},
+        "rear_door_L": {"rotation": [(0, Z3), (1.6, (0, 105, 0), "catmullrom")]},
+        "rear_door_R": {"rotation": [(0, Z3), (0.2, Z3), (1.6, (0, -105, 0), "catmullrom")]},
     }),
     animation("rear_doors_close", 1.6, "hold_on_last_frame", {
-        "rear_door_L": {"rotation": [(0, (0, 110, 0)), (0.2, (0, 110, 0)), (1.6, Z3, "catmullrom")]},
-        "rear_door_R": {"rotation": [(0, (0, -110, 0)), (1.4, Z3, "catmullrom")]},
+        "rear_door_L": {"rotation": [(0, (0, 105, 0)), (0.2, (0, 105, 0)), (1.6, Z3, "catmullrom")]},
+        "rear_door_R": {"rotation": [(0, (0, -105, 0)), (1.4, Z3, "catmullrom")]},
     }),
     animation("cockpit_door_open", 0.8, "hold_on_last_frame", {
         "cockpit_door": {"rotation": [(0, Z3), (0.8, (0, -95, 0), "catmullrom")]},
@@ -770,15 +1245,13 @@ anims = [
     animation("cockpit_door_close", 0.8, "hold_on_last_frame", {
         "cockpit_door": {"rotation": [(0, (0, -95, 0)), (0.8, Z3, "catmullrom")]},
     }),
-    # Заброшенный вертолёт: лопасти качаются на ветру, дверь поскрипывает
     animation("abandoned_wind", 4.0, "loop", {
         "main_rotor": {"rotation": wave([(1, 4, 1)], 4.0, 8)},
         **{f"blade_{k}": {"rotation": wave([(2, 1.5, 1)], 4.0, 8, phase=k * 1.1)} for k in range(5)},
         "tail_rotor": {"rotation": wave([(0, 12, 1)], 4.0, 8, phase=0.5)},
-        "side_door": {"position": wave([(2, 0.4, 2)], 4.0, 8, base=(1.6, 0, 3))},
+        "side_door": {"position": wave([(2, 0.4, 2)], 4.0, 8, base=(1.4, 0, 3))},
         "rear_door_L": {"rotation": wave([(1, 3, 1)], 4.0, 8, phase=2, base=(0, 25, 0))},
     }),
-    # Падение: вращение вокруг оси (отказ рулевого винта), снижение, удар
     animation("crash", 4.0, "hold_on_last_frame", {
         "main_rotor": {"rotation": [(0, Z3), (1, (0, 700, 0)), (2, (0, 1300, 0)), (3, (0, 1750, 0)),
                                     (3.3, (0, 1850, 0)), (4, (0, 1880, 0), "catmullrom")]},
@@ -789,13 +1262,24 @@ anims = [
                        "rotation": [(0, Z3), (1, (6, 150, -4), "catmullrom"), (2, (10, 400, -8), "catmullrom"),
                                     (3, (12, 600, -12), "catmullrom"), (3.3, (8, 640, -18), "catmullrom"),
                                     (3.6, (4, 648, -16), "catmullrom"), (4, (5, 650, -17), "catmullrom")]},
-        "landing_gear": {"position": [(0, (0, -0.6, 0)), (3.2, (0, -0.6, 0)), (3.4, (0, 1.4, 0))]},
+        "landing_gear": {"position": [(0, GEAR_DOWN), (3.2, GEAR_DOWN), (3.4, (0, 1.4, 0))]},
         **{f"blade_{k}": {"rotation": [(0, Z3), (3.3, Z3), (3.5, (0, 0, -6 - 2 * k), "catmullrom"),
                                        (4, (0, 0, -8 - 2 * k), "catmullrom")]} for k in range(5)},
     }),
 ]
 
 # ---------------------------------------------------------------------------
+
+
+def png_bytes():
+    raw = b"".join(b"\x00" + b"".join(bytes(p) for p in row) for row in img)
+
+    def chunk(t, d):
+        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", TEX, TEX, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
+
+
 tex_png = png_bytes()
 with open(os.path.join(HERE, "mi8_texture.png"), "wb") as f:
     f.write(tex_png)
@@ -804,7 +1288,7 @@ model = {
     "meta": {"format_version": "4.10", "model_format": "free", "box_uv": False},
     "name": "mi8_helicopter",
     "model_identifier": "mi8_helicopter",
-    "visible_box": [8, 5, 1],
+    "visible_box": [10, 6, 1],
     "variable_placeholders": "",
     "variable_placeholder_buttons": [],
     "timeline_setups": [],
@@ -824,5 +1308,5 @@ model = {
     "animations": anims,
 }
 with open(os.path.join(HERE, "mi8_helicopter.bbmodel"), "w", encoding="utf-8") as f:
-    json.dump(model, f, ensure_ascii=False, indent=1)
+    json.dump(model, f, ensure_ascii=False, separators=(",", ":"))
 print(f"elements: {len(elements)}, groups: {len(GROUPS)}, animations: {len(anims)}")
