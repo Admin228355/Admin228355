@@ -1351,39 +1351,70 @@ def java_element(e, Ra, ta, pivot):
 
 
 def export_java():
-    rp = os.path.join(PLUGIN, "resourcepack")
-    moved = {g for g, _ in PARTS.values() if g}
-    parts_yml = ["# Сгенерировано blockbench/mi8_helicopter/generate.py — не править вручную",
-                 f"blocks-per-unit: {BLOCKS_PER_UNIT}", f"display-scale: {JAVA_SHRINK * 16 * BLOCKS_PER_UNIT}", "parts:"]
-    files = {}
-    for part, (gname, pivot) in PARTS.items():
-        items = []
-        if gname:
-            g = GROUPS[gname]
-            pivot = tuple(g["origin"])
-            collect(g, I3, (0, 0, 0), items, set())
-        else:
-            collect(root, I3, (0, 0, 0), items, moved)
-        model = {"textures": {"0": "heli:item/mi8", "particle": "heli:item/mi8"},
-                 "elements": [java_element(e, Ra, ta, pivot) for e, Ra, ta in items]}
-        files[f"assets/heli/models/item/{part}.json"] = json.dumps(model, separators=(",", ":"))
-        files[f"assets/heli/items/{part}.json"] = json.dumps(
-            {"model": {"type": "minecraft:model", "model": f"heli:item/{part}"}})
-        pv = [round(c * BLOCKS_PER_UNIT, 5) for c in pivot]
-        parts_yml.append(f"  {part}: {{pivot: [{pv[0]}, {pv[1]}, {pv[2]}], elements: {len(items)}}}")
-    files["assets/heli/textures/item/mi8.png"] = tex_png
-    files["pack.mcmeta"] = json.dumps({"pack": {
-        "description": "Mi-8 helicopter (heli plugin)", "min_format": 69, "max_format": 999}}, indent=2)
-    zpath = os.path.join(PLUGIN, "src", "main", "resources", "mi8_resourcepack.zip")
-    os.makedirs(os.path.dirname(zpath), exist_ok=True)
-    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
-        for name, data in sorted(files.items()):
-            zi = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
-            zi.compress_type = zipfile.ZIP_DEFLATED
-            z.writestr(zi, data)
-    with open(os.path.join(PLUGIN, "src", "main", "resources", "mi8_parts.yml"), "w", encoding="utf-8") as f:
-        f.write("\n".join(parts_yml) + "\n")
-    print("resource pack:", os.path.relpath(zpath, HERE), f"{os.path.getsize(zpath) // 1024} KB")
+    """Экспорт через общую библиотеку: модели частей в paper-plugin/resourcepack и types/mi8.yml."""
+    import sys
+    sys.path.insert(0, os.path.join(HERE, ".."))
+    import heli_lib as L
+    L.elements = elements
+    L.JAVA_ROTATION_ORDER = JAVA_ROTATION_ORDER
+    parts = L.export_parts("mi8", root, GROUPS, [
+        ("mi8_body", None, (0, 20, 28), {}),
+        ("mi8_main_rotor", "main_rotor", None, {"anim": "spin", "axis": "y", "speed": 36}),
+        ("mi8_tail_rotor", "tail_rotor", None, {"anim": "spin", "axis": "x", "speed": 100}),
+        ("mi8_side_door", "side_door", None, {"anim": "slide", "door": "side", "out": [-1.4, 0, 0], "slide": [0, 0, 9.4]}),
+        ("mi8_cockpit_door", "cockpit_door", None, {"anim": "hinge", "door": "cockpit", "axis": "y", "angle": 95}),
+        ("mi8_rear_door_l", "rear_door_L", None, {"anim": "hinge", "door": "rear", "axis": "y", "angle": -105}),
+        ("mi8_rear_door_r", "rear_door_R", None, {"anim": "hinge", "door": "rear", "axis": "y", "angle": 105}),
+    ], tex_png)
+    seats = [{"name": "Пилот", "pos": [-4.6, 11.2, -32.5], "pilot": True},
+             {"name": "Второй пилот", "pos": [4.6, 11.2, -32.5]}]
+    seats += [{"name": f"Левая скамья {i + 1}", "pos": [-8.0, 12.4, z]} for i, z in enumerate((-8, -1, 6))]
+    seats += [{"name": f"Правая скамья {i + 1}", "pos": [8.0, 12.4, z]} for i, z in enumerate((-20, -12, -4, 4, 12))]
+    col = [[-17.6, 0.3, 1.5], [17.6, 0.3, 1.5], [0, 0.3, -40.2], [0, 15.8, 93]]
+    for z in range(-44, 21, 8):
+        col += [[-11, 9, z], [11, 9, z], [-10.5, 23, z], [10.5, 23, z], [0, 5.5, z], [0, 29, z]]
+    col += [[0, 11, -48], [0, 20, -44]] + [[0, 23, z] for z in range(28, 105, 8)] + [[0, 38, 108], [0, HUB_Y + 1, -13]]
+    L.write_type("mi8", {
+        "name": "Ми-8",
+        "storage-title": "Склад Ми-8",
+        "storage-size": 54,
+        "tilt-center": [0, 2.2, 0],
+        "hub": [0, HUB_Y, -13],
+        "rotor-radius": 84,
+        "exit-inside": [-5, 9, -19.5],
+        "exit-outside": [-22, 1, -19.5],
+        "flight": {},
+        "parts": parts,
+        "doors": [
+            {"id": "side", "name": "Боковая дверь", "ticks": 24, "open-sound": "minecraft:block.iron_trapdoor.open",
+             "close-sound": "minecraft:block.iron_trapdoor.close"},
+            {"id": "rear", "name": "Задние створки", "ticks": 32, "open-sound": "minecraft:block.iron_door.open",
+             "close-sound": "minecraft:block.iron_door.close"},
+            {"id": "cockpit", "name": "Дверь кабины", "ticks": 16, "open-sound": "minecraft:block.wooden_door.open",
+             "close-sound": "minecraft:block.wooden_door.close"},
+        ],
+        "seats": seats,
+        "hotspots": [
+            {"action": "DOOR", "door": "side", "pos": [-20, 7, -19.5], "width": 1.4, "height": 2.4},
+            {"action": "DOOR", "door": "side", "pos": [-5.5, 8, -19.5], "width": 1.0, "height": 2.0},
+            {"action": "DOOR", "door": "rear", "pos": [0, 4, 38], "width": 2.6, "height": 2.2},
+            {"action": "DOOR", "door": "rear", "pos": [7, 8, 18], "width": 1.0, "height": 1.8},
+            {"action": "DOOR", "door": "cockpit", "pos": [0, 8, -24.5], "width": 1.0, "height": 2.0},
+            {"action": "STORAGE", "pos": [-3, 7, 16], "width": 1.3, "height": 1.4},
+        ],
+        "collision": col,
+        "shell": [
+            {"x": [-17, 17], "z": [-46, 21], "levels": [0, 0]},
+            {"x": [-17, -8.8], "z": [-46, -25], "levels": [1, 2]},
+            {"x": [-17, -8.8], "z": [-25, -14], "levels": [1, 2], "door": "side"},
+            {"x": [-17, -8.8], "z": [-14, 21], "levels": [1, 2]},
+            {"x": [8.8, 17], "z": [-46, 21], "levels": [1, 2]},
+            {"x": [-17, 17], "z": [-54, -46], "levels": [1, 2]},
+            {"x": [-17, 17], "z": [21, 30], "levels": [1, 2], "door": "rear"},
+            {"x": [-17, 17], "z": [-46, 30], "levels": [3, 3]},
+            {"x": [-5, 5], "z": [30, 104], "levels": [2, 3]},
+        ],
+    })
 
 
 export_java()

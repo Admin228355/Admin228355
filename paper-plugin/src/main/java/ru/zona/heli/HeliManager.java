@@ -38,8 +38,8 @@ public final class HeliManager {
         return helis.values();
     }
 
-    public Helicopter spawn(Location at) {
-        Helicopter h = new Helicopter(plugin, UUID.randomUUID(), at.getWorld(), at.getX(), at.getY(), at.getZ(), at.getYaw());
+    public Helicopter spawn(HeliType type, Location at) {
+        Helicopter h = new Helicopter(plugin, type, UUID.randomUUID(), at.getWorld(), at.getX(), at.getY(), at.getZ(), at.getYaw());
         helis.put(h.id, h);
         save();
         return h;
@@ -101,15 +101,14 @@ public final class HeliManager {
         YamlConfiguration y = new YamlConfiguration();
         for (Helicopter h : helis.values()) {
             ConfigurationSection s = y.createSection("helicopters." + h.id);
+            s.set("type", h.type.id);
             s.set("world", h.world.getName());
             s.set("x", h.pos.x);
             s.set("y", h.pos.y);
             s.set("z", h.pos.z);
             s.set("yaw", h.yaw);
             s.set("health", h.health);
-            s.set("side-door", h.sideDoorOpen);
-            s.set("rear-doors", h.rearOpen);
-            s.set("cockpit-door", h.cockpitOpen);
+            h.doorOpen.forEach((door, open) -> s.set("doors." + door, open));
             ItemStack[] items = h.getInventory().getContents();
             for (int i = 0; i < items.length; i++) {
                 if (items[i] != null && !items[i].getType().isAir()) s.set("storage." + i, items[i]);
@@ -139,12 +138,16 @@ public final class HeliManager {
                 plugin.getLogger().warning("Мир для вертолёта " + key + " не найден, пропускаю");
                 continue;
             }
-            Helicopter h = new Helicopter(plugin, UUID.fromString(key), w, s.getDouble("x"), s.getDouble("y"),
+            HeliType type = plugin.type(s.getString("type", "mi8"));
+            if (type == null) {
+                plugin.getLogger().warning("Неизвестный тип вертолёта " + s.getString("type") + " (" + key + "), пропускаю");
+                continue;
+            }
+            Helicopter h = new Helicopter(plugin, type, UUID.fromString(key), w, s.getDouble("x"), s.getDouble("y"),
                     s.getDouble("z"), (float) s.getDouble("yaw"));
             h.health = s.getDouble("health", h.health);
-            h.sideDoorOpen = s.getBoolean("side-door");
-            h.rearOpen = s.getBoolean("rear-doors");
-            h.cockpitOpen = s.getBoolean("cockpit-door");
+            ConfigurationSection doors = s.getConfigurationSection("doors");
+            if (doors != null) for (String d : doors.getKeys(false)) h.setOpen(d, doors.getBoolean(d));
             ConfigurationSection st = s.getConfigurationSection("storage");
             if (st != null) {
                 for (String slot : st.getKeys(false)) {

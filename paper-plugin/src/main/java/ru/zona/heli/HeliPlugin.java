@@ -8,11 +8,18 @@ import org.bukkit.entity.Entity;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
-/** Плагин вертолёта Ми-8 для Paper 26.1.2. */
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.logging.Level;
+
+/** Плагин вертолётов (Ми-8, Black Hawk) для Paper 26.1.2. */
 public final class HeliPlugin extends JavaPlugin {
 
     private NamespacedKey tagKey;
-    private HeliModel model;
+    private Settings settings;
+    private final Map<String, HeliType> types = new LinkedHashMap<>();
     private HeliManager manager;
     private PackServer packServer;
 
@@ -20,7 +27,14 @@ public final class HeliPlugin extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         tagKey = new NamespacedKey(this, "heli");
-        model = HeliModel.load(this);
+        settings = new Settings(getConfig());
+        for (String id : HeliType.index(this)) {
+            try {
+                types.put(id, HeliType.load(this, id, settings));
+            } catch (Exception e) {
+                getLogger().log(Level.SEVERE, "Не удалось загрузить тип вертолёта " + id, e);
+            }
+        }
 
         // на всякий случай убрать сущности вертолётов, оставшиеся от прошлого запуска
         for (World w : Bukkit.getWorlds()) {
@@ -43,7 +57,7 @@ public final class HeliPlugin extends JavaPlugin {
         }
         Bukkit.getScheduler().runTaskTimer(this, manager::tick, 1L, 1L);
         Bukkit.getScheduler().runTaskTimer(this, manager::save, 20L * 60, 20L * 60);
-        getLogger().info("Mi8Helicopter включён. Частей модели: " + model.parts.size());
+        getLogger().info("Вертолёты: " + String.join(", ", types.keySet()));
     }
 
     @Override
@@ -59,8 +73,16 @@ public final class HeliPlugin extends JavaPlugin {
         return tagKey;
     }
 
-    public HeliModel model() {
-        return model;
+    public Settings settings() {
+        return settings;
+    }
+
+    public HeliType type(String id) {
+        return id == null ? null : types.get(id.toLowerCase());
+    }
+
+    public List<String> typeIds() {
+        return new ArrayList<>(types.keySet());
     }
 
     public HeliManager manager() {

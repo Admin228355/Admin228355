@@ -12,7 +12,6 @@ import org.bukkit.Particle;
 import org.bukkit.SoundCategory;
 import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.entity.Display;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.HumanEntity;
 import org.bukkit.entity.Interaction;
@@ -49,7 +48,8 @@ public final class Helicopter implements InventoryHolder {
     }
 
     private final HeliPlugin plugin;
-    private final HeliModel model;
+    private final Settings settings;
+    public final HeliType type;
     public final UUID id;
     public World world;
     public final Vector3d pos = new Vector3d();
@@ -59,9 +59,9 @@ public final class Helicopter implements InventoryHolder {
     public double rotor;            // 0..1 обороты винта
     public boolean engineOn;
     public double health;
-    public boolean sideDoorOpen, rearOpen, cockpitOpen;
-    private double sideT, rearT, cockpitT;
-    private double rotorAngle, tailAngle;
+    public final Map<String, Boolean> doorOpen = new LinkedHashMap<>();
+    private final Map<String, Double> doorT = new HashMap<>();
+    private final Map<String, Double> spinAngle = new HashMap<>();
     public boolean landed = true;
     private int noPilotTicks;
     private long ticks;
@@ -70,21 +70,26 @@ public final class Helicopter implements InventoryHolder {
     private final Inventory storage;
     private final Map<String, ItemDisplay> parts = new LinkedHashMap<>();
     private final List<ItemDisplay> seats = new ArrayList<>();
-    private final Map<UUID, HeliModel.Hotspot> hotspotByEntity = new HashMap<>();
+    private final Map<UUID, HeliType.Hotspot> hotspotByEntity = new HashMap<>();
     private final List<Interaction> hotspots = new ArrayList<>();
     public final Set<BlockKey> shell = new HashSet<>();
     private boolean shellDirty = true;
     private boolean spawned;
 
-    public Helicopter(HeliPlugin plugin, UUID id, World world, double x, double y, double z, float yaw) {
+    public Helicopter(HeliPlugin plugin, HeliType type, UUID id, World world, double x, double y, double z, float yaw) {
         this.plugin = plugin;
-        this.model = plugin.model();
+        this.settings = plugin.settings();
+        this.type = type;
         this.id = id;
         this.world = world;
         this.pos.set(x, y, z);
         this.yaw = yaw;
-        this.health = model.health;
-        this.storage = Bukkit.createInventory(this, 54, Component.text("Склад Ми-8"));
+        this.health = type.flight.health();
+        for (String d : type.doors.keySet()) {
+            doorOpen.put(d, false);
+            doorT.put(d, 0.0);
+        }
+        this.storage = Bukkit.createInventory(this, type.storageSize, Component.text(type.storageTitle));
     }
 
     @Override
@@ -92,11 +97,22 @@ public final class Helicopter implements InventoryHolder {
         return storage;
     }
 
+    public boolean isOpen(String door) {
+        return Boolean.TRUE.equals(doorOpen.get(door));
+    }
+
+    public void setOpen(String door, boolean open) {
+        if (!doorOpen.containsKey(door)) return;
+        doorOpen.put(door, open);
+        doorT.put(door, open ? 1.0 : 0.0);
+        shellDirty = true;
+    }
+
     // ------------------------------------------------------------------ math
 
     /** Матрица корпуса: локальные блоки -> смещение от pos (рыскание + тангаж + крен). */
     private Matrix4f bodyMatrix() {
-        Vector3f c = model.tiltCenter;
+        Vector3f c = type.tiltCenter;
         return new Matrix4f()
                 .rotateY((float) Math.toRadians(180.0 - yaw))
                 .translate(c)
@@ -107,7 +123,7 @@ public final class Helicopter implements InventoryHolder {
 
     /** Точка модели (единицы Blockbench) -> координаты мира. */
     public Location worldPoint(Vector3f units) {
-        Vector3f v = bodyMatrix().transformPosition(model.toBlocks(units));
+        Vector3f v = bodyMatrix().transformPosition(type.toBlocks(units));
         return new Location(world, pos.x + v.x, pos.y + v.y, pos.z + v.z);
     }
 
@@ -139,7 +155,7 @@ public final class Helicopter implements InventoryHolder {
         despawnEntities();
         NamespacedKey tag = plugin.tagKey();
         Location base = base();
-        for (HeliModel.Part part : model.parts.values()) {
+        for (HeliType.Part part : type.parts) {
             ItemDisplay d = world.spawn(base, ItemDisplay.class, e -> {
                 ItemStack item = new ItemStack(Material.STICK);
                 ItemMeta meta = item.getItemMeta();
@@ -148,7 +164,7 @@ public final class Helicopter implements InventoryHolder {
                 e.setItemStack(item);
                 e.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
                 e.setPersistent(false);
-                e.setViewRange(model.viewRange);
+                e.setViewRange(settings.viewRange);
                 e.setDisplayWidth(32f);
                 e.setDisplayHeight(12f);
                 e.setShadowRadius(0f);
@@ -158,7 +174,7 @@ public final class Helicopter implements InventoryHolder {
             });
             parts.put(part.key(), d);
         }
-        for (HeliModel.Seat seat : model.seats) {
+        for (HeliType.Seat seat : type.seats) {
             ItemDisplay s = world.spawn(worldPoint(seat.pos()), ItemDisplay.class, e -> {
                 e.setPersistent(false);
                 e.setTeleportDuration(2);
@@ -167,7 +183,7 @@ public final class Helicopter implements InventoryHolder {
             seats.add(s);
             plugin.manager().index(s, this);
         }
-        for (HeliModel.Hotspot h : model.hotspots) {
+        for (HeliType.Hotspot h : type.hotspots) {
             Interaction in = world.spawn(hotspotLocation(h), Interaction.class, e -> {
                 e.setInteractionWidth(h.width());
                 e.setInteractionHeight(h.height());
@@ -201,7 +217,7 @@ public final class Helicopter implements InventoryHolder {
         spawned = false;
     }
 
-    private Location hotspotLocation(HeliModel.Hotspot h) {
+    private Location hotspotLocation(HeliType.Hotspot h) {
         Location l = worldPoint(h.pos());
         l.setY(l.getY() - h.height() / 2 + 0.2);
         return l;
@@ -214,41 +230,48 @@ public final class Helicopter implements InventoryHolder {
         return true;
     }
 
+    private static Matrix4f axisRotate(Matrix4f m, char axis, double deg) {
+        float r = (float) Math.toRadians(deg);
+        return switch (axis) {
+            case 'x' -> m.rotateX(r);
+            case 'z' -> m.rotateZ(r);
+            default -> m.rotateY(r);
+        };
+    }
+
     private void updateEntities(boolean force) {
         Matrix4f body = bodyMatrix();
         Location base = base();
-        float s = model.displayScale;
-        for (HeliModel.Part part : model.parts.values()) {
+        float bpu = (float) type.blocksPerUnit;
+        for (HeliType.Part part : type.parts) {
             ItemDisplay d = parts.get(part.key());
             if (d == null) continue;
-            Vector3f pv = new Vector3f(part.pivot());          // pivot в mi8_parts.yml уже в блоках
-            Matrix4f m = new Matrix4f(body).translate(pv);
-            switch (part.key()) {
-                case "mi8_main_rotor" -> m.rotateY((float) Math.toRadians(rotorAngle));
-                case "mi8_tail_rotor" -> m.rotateX((float) Math.toRadians(tailAngle));
-                case "mi8_side_door" -> {
-                    double out = Math.min(1, sideT / 0.25), slide = Math.max(0, (sideT - 0.25) / 0.75);
-                    m.translate((float) (-1.4 * ease(out) * model.blocksPerUnit), 0f,
-                            (float) (9.4 * ease(slide) * model.blocksPerUnit));
+            Matrix4f m = new Matrix4f(body).translate(part.pivot());   // pivot уже в блоках
+            double t = part.door() == null ? 0 : doorT.getOrDefault(part.door(), 0.0);
+            switch (part.anim()) {
+                case "spin" -> axisRotate(m, part.axis(), spinAngle.getOrDefault(part.key(), 0.0));
+                case "hinge" -> axisRotate(m, part.axis(), part.angle() * ease(t));
+                case "slide" -> {
+                    double out = ease(Math.min(1, t / 0.25)), slide = ease(Math.max(0, (t - 0.25) / 0.75));
+                    Vector3f o = part.out(), s = part.slide();
+                    m.translate((float) (o.x * out + s.x * slide) * bpu, (float) (o.y * out + s.y * slide) * bpu,
+                            (float) (o.z * out + s.z * slide) * bpu);
                 }
-                case "mi8_rear_door_l" -> m.rotateY((float) Math.toRadians(-105 * ease(rearT)));
-                case "mi8_rear_door_r" -> m.rotateY((float) Math.toRadians(105 * ease(rearT)));
-                case "mi8_cockpit_door" -> m.rotateY((float) Math.toRadians(95 * ease(cockpitT)));
                 default -> { }
             }
-            m.scale(s).rotateY((float) Math.toRadians(model.yawOffset));
+            m.scale(type.displayScale).rotateY((float) Math.toRadians(settings.yawOffset));
             if (force || moving()) d.teleport(base);
             d.setInterpolationDelay(0);
             d.setTransformationMatrix(m);
         }
         for (int i = 0; i < seats.size(); i++) {
-            Location l = worldPoint(model.seats.get(i).pos());
-            l.setY(l.getY() + model.seatYOffset);
+            Location l = worldPoint(type.seats.get(i).pos());
+            l.setY(l.getY() + settings.seatYOffset);
             l.setYaw(yaw);
             seats.get(i).teleport(l, TeleportFlag.EntityState.RETAIN_PASSENGERS);
         }
         for (Interaction in : hotspots) {
-            HeliModel.Hotspot h = hotspotByEntity.get(in.getUniqueId());
+            HeliType.Hotspot h = hotspotByEntity.get(in.getUniqueId());
             if (h != null) in.teleport(hotspotLocation(h));
         }
     }
@@ -269,13 +292,13 @@ public final class Helicopter implements InventoryHolder {
         return seats.indexOf(seatEntity);
     }
 
-    public HeliModel.Hotspot hotspot(Entity e) {
+    public HeliType.Hotspot hotspot(Entity e) {
         return hotspotByEntity.get(e.getUniqueId());
     }
 
     public void sit(Player p, int index) {
         if (index < 0 || index >= seats.size()) return;
-        HeliModel.Seat seat = model.seats.get(index);
+        HeliType.Seat seat = type.seats.get(index);
         if (seat.pilot() && !p.hasPermission("heli.pilot")) {
             p.sendActionBar(Component.text("Нет прав пилота", NamedTextColor.RED));
             return;
@@ -288,7 +311,7 @@ public final class Helicopter implements InventoryHolder {
         if (p.isInsideVehicle()) p.leaveVehicle();
         s.addPassenger(p);
         if (seat.pilot()) {
-            p.sendMessage(Component.text("Вы пилот. Пробел — запуск/вверх, Shift — вниз (на земле — выйти), "
+            p.sendMessage(Component.text(type.name + ": вы пилот. Пробел — запуск/вверх, Shift — вниз (на земле — выйти), "
                     + "W/S — вперёд/назад, A/D — вбок, Ctrl — форсаж, поворот — мышью.", NamedTextColor.GREEN));
         } else {
             p.sendActionBar(Component.text("Место: " + seat.name(), NamedTextColor.GREEN));
@@ -297,9 +320,7 @@ public final class Helicopter implements InventoryHolder {
 
     /** Куда высадить игрока после выхода. */
     public Location exitPoint() {
-        Vector3f p = shell.isEmpty() ? new Vector3f(-22f, 1f, -19.5f) : new Vector3f(-5f, 9f, -19.5f);
-        if (!shell.isEmpty() && !sideDoorOpen) p = new Vector3f(0f, 9f, -12f);
-        Location l = worldPoint(p);
+        Location l = worldPoint(shell.isEmpty() ? type.exitOutside : type.exitInside);
         l.setYaw(yaw);
         return l;
     }
@@ -312,21 +333,19 @@ public final class Helicopter implements InventoryHolder {
 
     // ----------------------------------------------------------------- doors
 
-    public void toggle(HeliModel.Action a, Player who) {
-        String sound;
-        switch (a) {
-            case SIDE_DOOR -> { sideDoorOpen = !sideDoorOpen; sound = sideDoorOpen ? "minecraft:block.iron_trapdoor.open" : "minecraft:block.iron_trapdoor.close"; }
-            case REAR_DOORS -> { rearOpen = !rearOpen; sound = rearOpen ? "minecraft:block.iron_door.open" : "minecraft:block.iron_door.close"; }
-            case COCKPIT_DOOR -> { cockpitOpen = !cockpitOpen; sound = cockpitOpen ? "minecraft:block.wooden_door.open" : "minecraft:block.wooden_door.close"; }
-            case STORAGE -> {
-                who.openInventory(storage);
-                world.playSound(who.getLocation(), "minecraft:block.chest.open", SoundCategory.BLOCKS, 0.8f, 0.9f);
-                return;
-            }
-            default -> { return; }
-        }
-        world.playSound(who.getLocation(), sound, SoundCategory.BLOCKS, 1f, 0.8f);
+    public void toggleDoor(String door, Player who) {
+        HeliType.Door d = type.doors.get(door);
+        if (d == null) return;
+        boolean open = !isOpen(door);
+        doorOpen.put(door, open);
+        world.playSound(who.getLocation(), open ? d.openSound() : d.closeSound(), SoundCategory.BLOCKS, 1f, 0.8f);
+        who.sendActionBar(Component.text(d.name() + (open ? ": открыта" : ": закрыта"), NamedTextColor.GRAY));
         shellDirty = true;
+    }
+
+    public void openStorage(Player who) {
+        who.openInventory(storage);
+        world.playSound(who.getLocation(), "minecraft:block.chest.open", SoundCategory.BLOCKS, 0.8f, 0.9f);
     }
 
     // ------------------------------------------------------------ main tick
@@ -343,38 +362,41 @@ public final class Helicopter implements InventoryHolder {
 
         Player pilot = pilot();
         Input in = pilot != null ? pilot.getCurrentInput() : null;
+        Flight f = type.flight;
 
-        // двигатель
         if (pilot != null) {
             noPilotTicks = 0;
             if (!engineOn && in.isJump()) {
                 engineOn = true;
                 pilot.sendActionBar(Component.text("Запуск двигателей...", NamedTextColor.YELLOW));
             }
-        } else if (landed && engineOn && ++noPilotTicks > model.engineOffDelay) {
+        } else if (landed && engineOn && ++noPilotTicks > settings.engineOffDelay) {
             engineOn = false;
         }
-        rotor = engineOn ? Math.min(1, rotor + 1.0 / model.startupTicks) : Math.max(0, rotor - 1.0 / model.shutdownTicks);
+        rotor = engineOn ? Math.min(1, rotor + 1.0 / f.startupTicks()) : Math.max(0, rotor - 1.0 / f.shutdownTicks());
 
-        physics(pilot, in);
-        animate();
+        physics(pilot, in, f);
+        boolean doorsMoving = animate();
         updateShell();
-        if (spawned && (moving() || rotor > 0 || animatingDoors() || ticks % 40 == 0)) updateEntities(false);
+        if (spawned && (moving() || rotor > 0 || doorsMoving || ticks % 40 == 0)) updateEntities(false);
         effects(pilot);
     }
 
-    private boolean animatingDoors() {
-        return (sideT > 0 && sideT < 1) || (rearT > 0 && rearT < 1) || (cockpitT > 0 && cockpitT < 1)
-                || (sideDoorOpen ? sideT < 1 : sideT > 0) || (rearOpen ? rearT < 1 : rearT > 0)
-                || (cockpitOpen ? cockpitT < 1 : cockpitT > 0);
-    }
-
-    private void animate() {
-        rotorAngle = (rotorAngle + rotor * 36) % 360;       // до 2 об/с
-        tailAngle = (tailAngle + rotor * 100) % 360;
-        sideT = approach(sideT, sideDoorOpen ? 1 : 0, 1 / 24.0);
-        rearT = approach(rearT, rearOpen ? 1 : 0, 1 / 32.0);
-        cockpitT = approach(cockpitT, cockpitOpen ? 1 : 0, 1 / 16.0);
+    private boolean animate() {
+        for (HeliType.Part p : type.parts) {
+            if ("spin".equals(p.anim())) {
+                spinAngle.put(p.key(), (spinAngle.getOrDefault(p.key(), 0.0) + rotor * p.speed()) % 360);
+            }
+        }
+        boolean moving = false;
+        for (HeliType.Door d : type.doors.values()) {
+            double cur = doorT.getOrDefault(d.id(), 0.0), target = isOpen(d.id()) ? 1 : 0;
+            if (cur != target) {
+                doorT.put(d.id(), approach(cur, target, 1.0 / Math.max(1, d.ticks())));
+                moving = true;
+            }
+        }
+        return moving;
     }
 
     private static double approach(double v, double target, double step) {
@@ -383,7 +405,7 @@ public final class Helicopter implements InventoryHolder {
 
     // --------------------------------------------------------------- physics
 
-    private void physics(Player pilot, Input in) {
+    private void physics(Player pilot, Input in, Flight fl) {
         double lift = clamp((rotor - 0.7) / 0.3, 0, 1);
         double f = 0, s = 0, up = 0;
         boolean boost = false;
@@ -395,12 +417,11 @@ public final class Helicopter implements InventoryHolder {
         }
         if (landed && up < 0) up = 0;
 
-        // поворот за взглядом пилота
         float before = yaw;
         if (pilot != null && rotor > 0.5) {
             float target = pilot.getLocation().getYaw();
             float diff = wrap(target - yaw);
-            double rate = model.turnRate * (landed ? 0.35 : 1) * rotor;
+            double rate = fl.turnRate() * (landed ? 0.35 : 1) * rotor;
             yaw = wrap(yaw + (float) clamp(diff, -rate, rate));
         }
         yawRate = wrap(yaw - before);
@@ -408,17 +429,17 @@ public final class Helicopter implements InventoryHolder {
         double rad = Math.toRadians(yaw);
         double fx = -Math.sin(rad), fz = Math.cos(rad);          // вперёд
         double rx = -Math.cos(rad), rz = -Math.sin(rad);          // вправо
-        double a = model.accel * lift * (boost ? model.boost : 1);
+        double a = fl.accel() * lift * (boost ? fl.boost() : 1);
         if (!landed || up > 0) {
-            vel.x += (fx * f * a) + (rx * s * model.strafeAccel * lift);
-            vel.z += (fz * f * a) + (rz * s * model.strafeAccel * lift);
+            vel.x += (fx * f * a) + (rx * s * fl.strafeAccel() * lift);
+            vel.z += (fz * f * a) + (rz * s * fl.strafeAccel() * lift);
         }
-        vel.y += up * model.climbAccel * lift - model.gravity * (1 - lift);
+        vel.y += up * fl.climbAccel() * lift - fl.gravity() * (1 - lift);
         if (lift >= 1 && up == 0) vel.y *= 0.8;                  // удержание высоты
-        vel.x *= model.drag;
-        vel.z *= model.drag;
+        vel.x *= fl.drag();
+        vel.z *= fl.drag();
         vel.y *= 0.93;
-        double max = model.maxSpeed * (boost ? model.boost : 1);
+        double max = fl.maxSpeed() * (boost ? fl.boost() : 1);
         double h = Math.hypot(vel.x, vel.z);
         if (h > max) {
             vel.x *= max / h;
@@ -440,7 +461,7 @@ public final class Helicopter implements InventoryHolder {
         boolean ground = collides();
         pos.y += 0.06;
         if (ground && !landed && vy < 0) {
-            world.playSound(worldPoint(new Vector3f(0, 0, 0)), "minecraft:block.anvil.land", SoundCategory.NEUTRAL, 0.4f, 0.6f);
+            world.playSound(base(), "minecraft:block.anvil.land", SoundCategory.NEUTRAL, 0.4f, 0.6f);
         }
         landed = ground;
         if (landed) {
@@ -448,12 +469,9 @@ public final class Helicopter implements InventoryHolder {
             vel.z *= 0.55;
             if (vel.y < 0) vel.y = 0;
         }
-        if (impact > model.crashSpeed) {
-            damage((impact - model.crashSpeed) * model.crashDamage, null);
-        }
+        if (impact > fl.crashSpeed()) damage((impact - fl.crashSpeed()) * fl.crashDamage(), null);
 
-        // визуальный наклон
-        double targetPitch = landed ? 0 : f * 10 * lift + (h / Math.max(0.01, model.maxSpeed)) * 3 * Math.signum(f);
+        double targetPitch = landed ? 0 : f * 10 * lift + (h / Math.max(0.01, fl.maxSpeed())) * 3 * Math.signum(f);
         double targetRoll = landed ? 0 : s * 9 * lift + yawRate * 2.5;
         pitch += (float) ((targetPitch - pitch) * 0.12);
         roll += (float) ((clamp(targetRoll, -20, 20) - roll) * 0.12);
@@ -481,8 +499,8 @@ public final class Helicopter implements InventoryHolder {
     }
 
     private boolean collides() {
-        double k = model.blocksPerUnit;
-        for (Vector3f p : model.collision) {
+        double k = type.blocksPerUnit;
+        for (Vector3f p : type.collision) {
             double[] xz = yawRotate(p.x * k, p.z * k);
             if (solid(pos.x + xz[0], pos.y + p.y * k, pos.z + xz[1])) return true;
         }
@@ -509,7 +527,7 @@ public final class Helicopter implements InventoryHolder {
     // ------------------------------------------------------ collision shell
 
     private void updateShell() {
-        boolean want = model.shellEnabled && landed && !engineOn && rotor < 0.35;
+        boolean want = settings.shellEnabled && landed && !engineOn && rotor < 0.35;
         if (!want) {
             if (!shell.isEmpty()) clearShell();
             shellDirty = true;
@@ -521,20 +539,19 @@ public final class Helicopter implements InventoryHolder {
         }
     }
 
-    /** Невидимые барьеры вокруг салона: пол, борта, крыша, балка. Проёмы — там, где открыты двери. */
+    /** Невидимые барьеры по описанию типа (пол, борта, крыша, балка). Проёмы — там, где открыты двери. */
     private void rebuildShell() {
         Set<BlockKey> want = new HashSet<>();
         int bx = (int) Math.floor(pos.x), by = (int) Math.floor(pos.y), bz = (int) Math.floor(pos.z);
-        for (int dx = -15; dx <= 15; dx++) {
-            for (int dz = -15; dz <= 15; dz++) {
+        for (int dx = -16; dx <= 16; dx++) {
+            for (int dz = -16; dz <= 16; dz++) {
                 double[] l = yawInverse(bx + dx + 0.5 - pos.x, bz + dz + 0.5 - pos.z);
-                double mx = l[0] / model.blocksPerUnit, mz = l[1] / model.blocksPerUnit;
-                for (int level = 0; level <= 3; level++) {
+                double mx = l[0] / type.blocksPerUnit, mz = l[1] / type.blocksPerUnit;
+                for (int level = 0; level <= 4; level++) {
                     if (shellCell(mx, mz, level)) want.add(new BlockKey(bx + dx, by + level, bz + dz));
                 }
             }
         }
-        // убрать лишние
         for (BlockKey k : new ArrayList<>(shell)) {
             if (!want.contains(k)) {
                 Block b = world.getBlockAt(k.x(), k.y(), k.z());
@@ -542,7 +559,6 @@ public final class Helicopter implements InventoryHolder {
                 shell.remove(k);
             }
         }
-        // поставить новые (только в воздух)
         for (BlockKey k : want) {
             if (shell.contains(k)) continue;
             Block b = world.getBlockAt(k.x(), k.y(), k.z());
@@ -551,7 +567,6 @@ public final class Helicopter implements InventoryHolder {
                 shell.add(k);
             }
         }
-        // игроков, оказавшихся в полу, поднять
         for (Player p : world.getPlayers()) {
             if (p.getLocation().distanceSquared(new Location(world, pos.x, pos.y, pos.z)) > 400) continue;
             if (p.isInsideVehicle()) continue;
@@ -561,25 +576,13 @@ public final class Helicopter implements InventoryHolder {
     }
 
     private boolean shellCell(double mx, double mz, int level) {
-        double ax = Math.abs(mx);
-        boolean cabin = mz >= -46 && mz <= 21;
-        switch (level) {
-            case 0:
-                return ax <= 17 && cabin;
-            case 1:
-            case 2:
-                if (cabin && ax > 8.8 && ax <= 17) {
-                    return !(sideDoorOpen && mx < 0 && mz >= -25 && mz <= -14);
-                }
-                if (mz < -46 && mz >= -54 && ax <= 17) return true;                  // нос
-                if (mz > 21 && mz <= 30 && ax <= 17) return !rearOpen;              // створки
-                return level == 2 && mz > 30 && mz <= 104 && ax <= 5;               // балка
-            case 3:
-                if (ax <= 17 && mz >= -46 && mz <= 30) return true;                 // крыша
-                return mz > 30 && mz <= 104 && ax <= 5;
-            default:
-                return false;
+        for (HeliType.ShellBox b : type.shell) {
+            if (level < b.l0() || level > b.l1()) continue;
+            if (mx < b.x0() || mx > b.x1() || mz < b.z0() || mz > b.z1()) continue;
+            if (b.door() != null && isOpen(b.door())) continue;
+            return true;
         }
+        return false;
     }
 
     public void clearShell() {
@@ -594,10 +597,10 @@ public final class Helicopter implements InventoryHolder {
 
     private void effects(Player pilot) {
         if (rotor > 0.05 && ticks % 4 == 0) {
-            world.playSound(worldPoint(new Vector3f(0, HeliModel.HUB_Y, -13)), model.rotorSound, SoundCategory.NEUTRAL,
+            world.playSound(worldPoint(type.hub), settings.rotorSound, SoundCategory.NEUTRAL,
                     (float) (0.6 + rotor * 1.6), (float) (0.4 + rotor * 0.35));
         }
-        if (model.downwash && rotor > 0.6 && ticks % 2 == 0) {
+        if (settings.downwash && rotor > 0.6 && ticks % 2 == 0) {
             int ground = groundBelow(12);
             if (ground != Integer.MIN_VALUE) {
                 double strength = 1 - (pos.y - ground) / 13.0;
@@ -608,14 +611,15 @@ public final class Helicopter implements InventoryHolder {
                 }
             }
         }
-        if (health < model.health * 0.4 && ticks % 3 == 0) {
-            Location l = worldPoint(new Vector3f(0, 30, -13));
+        double maxHp = type.flight.health();
+        if (health < maxHp * 0.4 && ticks % 3 == 0) {
+            Location l = worldPoint(new Vector3f(type.hub.x, type.hub.y - 4, type.hub.z));
             world.spawnParticle(Particle.LARGE_SMOKE, l, 2, 0.4, 0.2, 0.4, 0.01);
         }
-        if (model.rotorStrike && rotor > 0.5 && ticks % 5 == 0) {
+        if (settings.rotorStrike && rotor > 0.5 && ticks % 5 == 0) {
             int hits = 0;
-            double k = model.blocksPerUnit;
-            for (Vector3f t : model.rotorTips) {
+            double k = type.blocksPerUnit;
+            for (Vector3f t : type.rotorTips) {
                 double[] xz = yawRotate(t.x * k, t.z * k);
                 if (solid(pos.x + xz[0], pos.y + t.y * k, pos.z + xz[1])) {
                     hits++;
@@ -631,10 +635,11 @@ public final class Helicopter implements InventoryHolder {
             double kmh = Math.hypot(vel.x, vel.z) * 20 * 3.6;
             int ground = groundBelow(64);
             String alt = ground == Integer.MIN_VALUE ? ">64" : String.valueOf((int) Math.round(pos.y - ground - 1));
-            NamedTextColor hc = health > model.health * 0.6 ? NamedTextColor.GREEN
-                    : health > model.health * 0.3 ? NamedTextColor.YELLOW : NamedTextColor.RED;
-            pilot.sendActionBar(Component.text("Ротор " + (int) (rotor * 100) + "%  |  " + (int) kmh + " км/ч  |  высота "
-                    + alt + " м  |  ", NamedTextColor.GRAY).append(Component.text("корпус " + (int) (health / model.health * 100) + "%", hc)));
+            NamedTextColor hc = health > maxHp * 0.6 ? NamedTextColor.GREEN
+                    : health > maxHp * 0.3 ? NamedTextColor.YELLOW : NamedTextColor.RED;
+            pilot.sendActionBar(Component.text(type.name + "  |  ротор " + (int) (rotor * 100) + "%  |  " + (int) kmh
+                    + " км/ч  |  высота " + alt + " м  |  ", NamedTextColor.GRAY)
+                    .append(Component.text("корпус " + (int) (health / maxHp * 100) + "%", hc)));
         }
     }
 
@@ -657,7 +662,7 @@ public final class Helicopter implements InventoryHolder {
     }
 
     public void repair() {
-        health = model.health;
+        health = type.flight.health();
     }
 
     /** Уничтожить: взрыв, выпадение груза, удаление из мира. */

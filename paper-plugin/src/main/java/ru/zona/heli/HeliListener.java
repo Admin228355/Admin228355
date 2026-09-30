@@ -38,16 +38,16 @@ public final class HeliListener implements Listener {
             p.sendActionBar(Component.text("Нет доступа к вертолёту", NamedTextColor.RED));
             return;
         }
-        HeliModel.Hotspot spot = h.hotspot(clicked);
+        HeliType.Hotspot spot = h.hotspot(clicked);
         if (spot == null) {
             int seat = h.seatIndex(clicked);
             if (seat >= 0) h.sit(p, seat);
             return;
         }
-        if (spot.action() == HeliModel.Action.SEAT) {
-            h.sit(p, spot.seat());
-        } else {
-            h.toggle(spot.action(), p);
+        switch (spot.action()) {
+            case SEAT -> h.sit(p, spot.seat());
+            case DOOR -> h.toggleDoor(spot.door(), p);
+            case STORAGE -> h.openStorage(p);
         }
     }
 
@@ -67,7 +67,7 @@ public final class HeliListener implements Listener {
         if (!(e.getEntity() instanceof Player p)) return;
         Helicopter h = plugin.manager().byEntity(e.getDismounted());
         if (h == null || h.destroyed) return;
-        if (!h.landed && !plugin.model().allowJumpOut && p.isOnline() && !p.isDead()) {
+        if (!h.landed && !plugin.settings().allowJumpOut && p.isOnline() && !p.isDead()) {
             e.setCancelled(true);
             return;
         }

@@ -29,11 +29,14 @@ public final class HeliCommand implements CommandExecutor, TabCompleter {
         switch (sub) {
             case "spawn" -> {
                 if (!admin(sender) || p == null) return true;
+                String id = args.length > 1 ? args[1].toLowerCase() : plugin.settings().defaultType;
+                HeliType type = plugin.type(id);
+                if (type == null) { err(sender, "Нет такого вертолёта: " + id + ". Есть: " + String.join(", ", plugin.typeIds())); return true; }
                 Block target = p.getTargetBlockExact(30);
                 Location at = target != null ? target.getLocation().add(0.5, 1, 0.5) : p.getLocation();
                 at.setYaw(p.getLocation().getYaw());
-                plugin.manager().spawn(at);
-                ok(sender, "Ми-8 создан. ПКМ по креслу пилота — сесть.");
+                plugin.manager().spawn(type, at);
+                ok(sender, type.name + " создан. ПКМ по креслу пилота — сесть.");
             }
             case "remove" -> {
                 if (!admin(sender) || p == null) return true;
@@ -53,7 +56,7 @@ public final class HeliCommand implements CommandExecutor, TabCompleter {
                 if (!admin(sender)) return true;
                 ok(sender, "Вертолётов: " + plugin.manager().all().size());
                 for (Helicopter h : plugin.manager().all()) {
-                    sender.sendMessage(Component.text(String.format(" • %s %.0f %.0f %.0f  корпус %.0f", h.world.getName(),
+                    sender.sendMessage(Component.text(String.format(" • %s  %s %.0f %.0f %.0f  корпус %.0f", h.type.name, h.world.getName(),
                             h.pos.x, h.pos.y, h.pos.z, h.health), NamedTextColor.GRAY));
                 }
             }
@@ -70,7 +73,7 @@ public final class HeliCommand implements CommandExecutor, TabCompleter {
                 ok(sender, "Ресурспак отправлен.");
             }
             default -> sender.sendMessage(Component.text(
-                    "/heli spawn | remove | list | repair | engine | pack", NamedTextColor.YELLOW));
+                    "/heli spawn [" + String.join("|", plugin.typeIds()) + "] | remove | list | repair | engine | pack", NamedTextColor.YELLOW));
         }
         return true;
     }
@@ -92,6 +95,9 @@ public final class HeliCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) return SUBS.stream().filter(s -> s.startsWith(args[0].toLowerCase())).toList();
+        if (args.length == 2 && args[0].equalsIgnoreCase("spawn")) {
+            return plugin.typeIds().stream().filter(s -> s.startsWith(args[1].toLowerCase())).toList();
+        }
         return Stream.<String>empty().toList();
     }
 }

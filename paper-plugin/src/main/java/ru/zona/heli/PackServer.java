@@ -18,7 +18,7 @@ import java.util.logging.Level;
 /** Выкладывает ресурспак из jar в папку плагина и (по желанию) раздаёт его по HTTP. */
 public final class PackServer {
 
-    private static final UUID PACK_ID = UUID.nameUUIDFromBytes("heli-mi8-pack".getBytes(StandardCharsets.UTF_8));
+    private static final UUID PACK_ID = UUID.nameUUIDFromBytes("heli-pack-v2".getBytes(StandardCharsets.UTF_8));
     private final HeliPlugin plugin;
     private HttpServer server;
     private byte[] data;
@@ -30,11 +30,11 @@ public final class PackServer {
     }
 
     public void start() {
-        try (InputStream in = plugin.getResource("mi8_resourcepack.zip")) {
-            if (in == null) throw new IllegalStateException("mi8_resourcepack.zip не найден в jar");
+        try (InputStream in = plugin.getResource("heli_resourcepack.zip")) {
+            if (in == null) throw new IllegalStateException("heli_resourcepack.zip не найден в jar");
             data = in.readAllBytes();
             sha1 = MessageDigest.getInstance("SHA-1").digest(data);
-            File out = new File(plugin.getDataFolder(), "mi8_resourcepack.zip");
+            File out = new File(plugin.getDataFolder(), "heli_resourcepack.zip");
             plugin.getDataFolder().mkdirs();
             Files.copy(new java.io.ByteArrayInputStream(data), out.toPath(), StandardCopyOption.REPLACE_EXISTING);
         } catch (Exception e) {
@@ -50,7 +50,7 @@ public final class PackServer {
         String host = plugin.getConfig().getString("resource-pack.public-host", "localhost");
         try {
             server = HttpServer.create(new InetSocketAddress(port), 0);
-            server.createContext("/mi8_resourcepack.zip", ex -> {
+            server.createContext("/heli_resourcepack.zip", ex -> {
                 ex.getResponseHeaders().add("Content-Type", "application/zip");
                 ex.sendResponseHeaders(200, data.length);
                 try (OutputStream os = ex.getResponseBody()) {
@@ -58,11 +58,11 @@ public final class PackServer {
                 }
             });
             server.start();
-            url = "http://" + host + ":" + port + "/mi8_resourcepack.zip";
+            url = "http://" + host + ":" + port + "/heli_resourcepack.zip";
             plugin.getLogger().info("Ресурспак раздаётся по адресу " + url);
         } catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "Не удалось запустить HTTP-сервер ресурспака на порту " + port
-                    + ". Укажите resource-pack.url или установите plugins/Mi8Helicopter/mi8_resourcepack.zip вручную.", e);
+                    + ". Укажите resource-pack.url или установите plugins/Helicopters/heli_resourcepack.zip вручную.", e);
         }
     }
 
@@ -73,6 +73,6 @@ public final class PackServer {
     public void send(Player p) {
         if (url == null || !plugin.getConfig().getBoolean("resource-pack.send-on-join", true)) return;
         boolean force = plugin.getConfig().getBoolean("resource-pack.required", false);
-        p.setResourcePack(PACK_ID, url, sha1, Component.text("Модель вертолёта Ми-8"), force);
+        p.setResourcePack(PACK_ID, url, sha1, Component.text("Модели вертолётов"), force);
     }
 }

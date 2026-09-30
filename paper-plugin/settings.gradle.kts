@@ -1,1 +1,1 @@
-rootProject.name = "mi8-helicopter"
+rootProject.name = "helicopters"
