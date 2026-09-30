@@ -73,6 +73,10 @@ public final class PackServer {
     public void send(Player p) {
         if (url == null || !plugin.getConfig().getBoolean("resource-pack.send-on-join", true)) return;
         boolean force = plugin.getConfig().getBoolean("resource-pack.required", false);
-        p.setResourcePack(PACK_ID, url, sha1, Component.text("Модели вертолётов"), force);
+        try {
+            p.setResourcePack(PACK_ID, url, sha1, Component.text("Модели вертолётов"), force);
+        } catch (NoSuchMethodError e) {
+            p.setResourcePack(PACK_ID, url, sha1, "Модели вертолётов", force);
+        }
     }
 }
