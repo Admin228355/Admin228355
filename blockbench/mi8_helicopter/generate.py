@@ -21,9 +21,11 @@ import os
 import random
 import struct
 import uuid
+import zipfile
 import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+PLUGIN = os.path.join(HERE, "..", "..", "paper-plugin")
 RNG = random.Random(1986)
 TEX = 256
 
@@ -673,7 +675,7 @@ def hull_px(x, y, z, seed):
     if y < 6.2:
         c = mix(c, (98, 104, 86), 0.5)
     # копоть за выхлопными трубами
-    if abs(x) > 5 and y > 21 and z > -2:
+    if False:  # копоть от выхлопа больше не нужна
         s = math.exp(-(z + 2) / 26) * max(0, min(1, (y - 21) / 5))
         c = mix(c, (30, 28, 26), s * 0.75 * (0.7 + 0.3 * fbm(z * .5, y * .5, 30)))
     # потёки ржавчины
@@ -883,81 +885,19 @@ cab.append(cube("moss_patch", [-8, 7.02, 15], [-3, 7.2, 20], "moss"))
 cab.append(cube("debris_panel", [3, 7, -4], [7, 7.4, 1], "rust", origin=[5, 7, -1.5], rot=[0, 30, 8]))
 
 # ---------------------------------------------------------------------------
-# Мотогондола (двигатели), воздухозаборники, выхлоп, редуктор
+# Пилон несущего винта: невысокий гладкий обтекатель прямо на крыше
+# (капот двигателей, воздухозаборники и выхлоп убраны)
 # ---------------------------------------------------------------------------
-NAC = [(-38.5, 8.0, 34.4, 3.4), (-36.0, 8.6, 36.0, 3.5), (-30.0, 8.8, 36.8, 3.5), (-10.0, 8.8, 37.0, 3.5),
-       (0.0, 8.4, 36.5, 3.2), (6.0, 7.6, 35.2, 3.0), (12.0, 6.4, 33.4, 2.8), (18.0, 4.8, 31.2, 2.6),
-       (23.0, 3.0, 29.6, 2.4), (26.0, 1.2, 28.9, 2.2)]
-NAC_Y0 = 24.0
-NAC_PROF = make_profile([(z, a, 2 * NAC_Y0 - t, t, n, n) for z, a, t, n in NAC])
-NAC_Z = [-38.5, -37.2, -36.0, -33, -30.0, -25, -20, -15, -10.0, -5, 0.0, 3, 6.0, 9, 12.0, 15, 18.0, 20.5, 23.0, 24.5, 26.0]
-NN = 18
-NAC_TH = arc_thetas(NN, -10.0, NAC_PROF, -math.pi / 2, math.pi / 2, closed=False)
-REG_N = (192, 0, 64, 64, -38.5, 26.0)
-
-
-def nac_uv(i, k):
-    u0, v0, w, h, za, zb = REG_N
-    return [u0 + w * k / NN, v0 + h * (NAC_Z[i] - za) / (zb - za),
-            u0 + w * (k + 1) / NN, v0 + h * (NAC_Z[i + 1] - za) / (zb - za)]
-
-
+HUB_Y = 33.4
 eng = []
-nrings = [[se_point(z, th, NAC_PROF) for th in NAC_TH] for z in NAC_Z]
-loft("nacelle", nrings, [(0, NAC_Y0, z) for z in NAC_Z], 0.5, lambda i, k, c: nac_uv(i, k),
-     lambda i, k, c: eng, closed=False, inner="interior_dark")
-
-
-def paint_nacelle():
-    u0, v0, w, h, za, zb = REG_N
-    for py in range(h):
-        z = za + (zb - za) * (py + 0.5) / h
-        for px in range(w):
-            th = lerp(-math.pi / 2, math.pi / 2, (px + 0.5) / w)
-            x, y, _ = se_point(z, th, NAC_PROF)
-            c = camo_color(z + 500, x * 1.4, 13)
-            # жалюзи на боковых капотах
-            if abs(x) > 5.5 and 28.5 < y < 33.5 and (-30 < z < -12) and int(z * 1.3) % 2 == 0:
-                c = (26, 26, 24)
-            if abs(z - (-20.5)) < 0.5 or abs(z - (-4)) < 0.5 or abs(z - 10) < 0.5:
-                c = shade(c, 0.72)
-            if abs(x) < 0.3:
-                c = shade(c, 0.8)
-            if z > -4 and abs(x) > 4:
-                c = mix(c, (30, 28, 26), min(0.8, math.exp(-(z + 4) / 18) * 0.9))
-            put(u0 + px, v0 + py, c)
-
-
-paint_nacelle()
-cap("nacelle_front", -38.3, 0.5, eng, "hull", prof=NAC_PROF, rows=10)
-for side, xc in (("L", -4.3), ("R", 4.3)):
-    intake = []
-    tube(f"intake_{side}", [(xc, 31.2, -38.2), (xc, 31.2, -41.0), (xc, 31.2, -42.8), (xc, 31.2, -43.3)],
-         [3.1, 3.2, 3.35, 3.0], 16, intake, "hull", "soot", t=0.5)
-    intake += disc(f"intake_fan_{side}", (xc, 31.2, -40.5), (0, 0, 1), 3.0, 0.3, "soot", "intake")
-    intake += disc(f"intake_cone_{side}", (xc, 31.2, -41.6), (0, 0, 1), 1.1, 1.8, "metal")
-    intake += disc(f"intake_cone_tip_{side}", (xc, 31.2, -42.6), (0, 0, 1), 0.6, 0.6, "metal")
-    eng += intake
-for sgn in (-1, 1):
-    s = "L" if sgn < 0 else "R"
-    ex = []
-    tube(f"exhaust_{s}", [(sgn * 7.0, 30.6, -9.0), (sgn * 10.2, 30.6, -7.0), (sgn * 13.0, 30.3, -3.0),
-                          (sgn * 14.3, 30.0, 1.5), (sgn * 14.8, 29.9, 4.0)],
-         [2.1, 2.2, 2.3, 2.5, 2.7], 14, ex, "exhaust", "soot", t=0.4)
-    eng += ex
-    eng += disc(f"exhaust_soot_{s}", (sgn * 14.4, 30.0, 2.2), (0.15 * sgn, 0, 1), 2.1, 0.2, "soot")
-_gb = []
-tube("gearbox_fairing", [(0, 35.8, -13), (0, 37.6, -13), (0, 39.0, -13), (0, 39.8, -13)],
-     [(5.6, 6.6), (5.2, 6.0), (3.6, 4.2), (1.6, 1.8)], 16, _gb, "hull", "interior_dark", ref=(1, 0, 0))
-eng += _gb
-_fan = []
-tube("fan_intake", [(0, 37.2, -6.2), (0, 37.2, -3.5), (0, 36.8, -0.5)], [2.9, 2.9, 2.6], 14, _fan, "hull", "soot")
-eng += _fan
-eng += disc("fan_grille", (0, 37.2, -5.8), (0, 0, 1), 2.7, 0.2, "metal", "intake")
+_py = []
+tube("rotor_pylon", [(0, 27.6, -13), (0, 29.2, -13), (0, 30.6, -13), (0, 31.4, -13), (0, 31.8, -13)],
+     [(5.2, 7.4), (4.6, 6.4), (3.2, 4.4), (1.9, 2.4), (1.2, 1.4)], 18, _py, "hull", "interior_dark", ref=(1, 0, 0))
+eng += _py
 _mast = []
-tube("rotor_mast", [(0, 39.4, -13), (0, 41.6, -13)], [1.25, 1.1], 10, _mast, "metal", "metal", ref=(1, 0, 0))
+tube("rotor_mast", [(0, 31.2, -13), (0, HUB_Y - 0.4, -13)], [1.2, 1.05], 10, _mast, "metal", "metal", ref=(1, 0, 0))
 eng += _mast
-eng += disc("swashplate", (0, 40.3, -13), (0, 1, 0), 3.0, 0.7, "metal")
+eng += disc("swashplate", (0, 32.0, -13), (0, 1, 0), 2.6, 0.6, "metal")
 
 # ---------------------------------------------------------------------------
 # Топливные баки (капсулы) и хвостовое оперение
@@ -1011,19 +951,19 @@ tail += disc("tail_light", (0, 39.8, 109.5), (0, 0, 1), 0.5, 0.6, "chrome")
 # ---------------------------------------------------------------------------
 # Несущий винт (5 лопастей) и рулевой винт (3 лопасти)
 # ---------------------------------------------------------------------------
-HUB = (0, 42.4, -13)
+HUB = (0, HUB_Y, -13)
 rotor_children = []
-rotor_children += disc("hub_plate_low", (0, 41.9, -13), (0, 1, 0), 3.2, 1.0, "metal")
-rotor_children += disc("hub_plate_high", (0, 43.1, -13), (0, 1, 0), 2.6, 1.2, "metal")
-rotor_children += disc("hub_cap", (0, 44.1, -13), (0, 1, 0), 1.4, 0.9, "metal")
+rotor_children += disc("hub_plate_low", (0, HUB_Y - 0.5, -13), (0, 1, 0), 3.2, 1.0, "metal")
+rotor_children += disc("hub_plate_high", (0, HUB_Y + 0.7, -13), (0, 1, 0), 2.6, 1.2, "metal")
+rotor_children += disc("hub_cap", (0, HUB_Y + 1.7, -13), (0, 1, 0), 1.4, 0.9, "metal")
 for k in range(5):
     blade = []
-    blade += rod(f"blade{k}_hinge", (2.4, 42.4, -13), (8.5, 42.4, -13), 0.8, "metal")
-    blade += rod(f"blade{k}_damper", (2.4, 43.4, -12.2), (7, 43.2, -12.2), 0.35, "chrome")
-    blade.append(cube(f"blade{k}", [8.5, 42.1, -15.1], [84, 42.65, -11.1], "bladeedge",
+    blade += rod(f"blade{k}_hinge", (2.4, HUB_Y, -13), (8.5, HUB_Y, -13), 0.8, "metal")
+    blade += rod(f"blade{k}_damper", (2.4, HUB_Y + 1.0, -12.2), (7, HUB_Y + 0.8, -12.2), 0.35, "chrome")
+    blade.append(cube(f"blade{k}", [8.5, HUB_Y - 0.3, -15.1], [84, HUB_Y + 0.25, -11.1], "bladeedge",
                       {"up": "bladestrip", "down": "bladestrip"}))
-    blade.append(cube(f"blade{k}_te", [8.5, 42.2, -11.1], [84, 42.5, -10.5], "bladeedge"))
-    blade.append(cube(f"blade{k}_tip", [84, 42.1, -15.1], [88, 42.65, -11.1], "warn"))
+    blade.append(cube(f"blade{k}_te", [8.5, HUB_Y - 0.2, -11.1], [84, HUB_Y + 0.1, -10.5], "bladeedge"))
+    blade.append(cube(f"blade{k}_tip", [84, HUB_Y - 0.3, -15.1], [88, HUB_Y + 0.25, -11.1], "warn"))
     rotor_children.append(group(f"blade_{k}", HUB, blade, rotation=[0, k * 72, 0]))
 main_rotor = group("main_rotor", HUB, rotor_children)
 
@@ -1098,7 +1038,7 @@ body = group("body", (0, 18, 0), [
     group("fuselage", (0, 18, 0), fus_panels + fus_misc + decals),
     group("cockpit", (0, 12, -34), ck),
     group("cabin_interior", (0, 12, 0), cab),
-    group("engines", (0, 32, -14), eng),
+    group("rotor_pylon", (0, 30, -13), eng),
     group("fuel_tanks", (0, 11, -5), tanks),
     group("tail", (0, 24, 60), tail),
     side_door, cockpit_door, rear_L, rear_R,
@@ -1310,3 +1250,140 @@ model = {
 with open(os.path.join(HERE, "mi8_helicopter.bbmodel"), "w", encoding="utf-8") as f:
     json.dump(model, f, ensure_ascii=False, separators=(",", ":"))
 print(f"elements: {len(elements)}, groups: {len(GROUPS)}, animations: {len(anims)}")
+
+
+# ---------------------------------------------------------------------------
+# Экспорт для Paper-плагина: ресурспак Java 26.1.2 (модели предметов по частям)
+# Каждая подвижная часть — отдельная модель предмета, которую плагин показывает
+# через ItemDisplay. Геометрия ужата в 4 раза, чтобы уложиться в лимит
+# Java-моделей (-16..32), плагин растягивает её обратно (масштаб 8 = 1 блок на 8 ед.).
+# ---------------------------------------------------------------------------
+# Порядок осей свободного поворота элементов в Java 26.1+. По умолчанию — как в
+# Blockbench (ZYX: сначала X, потом Y, потом Z). Если в игре панели корпуса
+# встали криво — поменяйте на "XYZ" и перезапустите генератор.
+JAVA_ROTATION_ORDER = "ZYX"
+BLOCKS_PER_UNIT = 1 / 8     # 8 единиц модели = 1 блок (Ми-8 ≈ 19 блоков в длину)
+JAVA_SHRINK = 4
+PARTS = {  # часть: (группа или None для «всего остального», точка поворота)
+    "mi8_body": (None, (0, 20, 28)),
+    "mi8_main_rotor": ("main_rotor", None),
+    "mi8_tail_rotor": ("tail_rotor", None),
+    "mi8_side_door": ("side_door", None),
+    "mi8_cockpit_door": ("cockpit_door", None),
+    "mi8_rear_door_l": ("rear_door_L", None),
+    "mi8_rear_door_r": ("rear_door_R", None),
+}
+ELS = {e["uuid"]: e for e in elements}
+
+
+def mat_mul(A, B):
+    return [[sum(A[i][k] * B[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+
+
+def mat_vec(A, v):
+    return tuple(sum(A[i][k] * v[k] for k in range(3)) for i in range(3))
+
+
+def rot_zyx(r):
+    x, y, z = (math.radians(a) for a in r)
+    Rx = [[1, 0, 0], [0, math.cos(x), -math.sin(x)], [0, math.sin(x), math.cos(x)]]
+    Ry = [[math.cos(y), 0, math.sin(y)], [0, 1, 0], [-math.sin(y), 0, math.cos(y)]]
+    Rz = [[math.cos(z), -math.sin(z), 0], [math.sin(z), math.cos(z), 0], [0, 0, 1]]
+    return mat_mul(Rz, mat_mul(Ry, Rx))
+
+
+I3 = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+
+
+def collect(node, Ra, ta, out, skip):
+    """Собирает элементы группы с учётом поворотов вложенных групп."""
+    if node.get("rotation"):
+        G = node["origin"]
+        Rg = rot_zyx(node["rotation"])
+        # A(p) = Ra*(G + Rg*(p-G)) + ta
+        tg = sub(tuple(G), mat_vec(Rg, tuple(G)))
+        ta = add(mat_vec(Ra, tg), ta)
+        Ra = mat_mul(Ra, Rg)
+    for c in node["children"]:
+        if isinstance(c, str):
+            out.append((ELS[c], Ra, ta))
+        elif c["name"] not in skip:
+            collect(c, Ra, ta, out, skip)
+
+
+def euler_xyz(R):
+    """R = Rx*Ry*Rz -> углы (x, y, z) в градусах."""
+    y = math.asin(max(-1, min(1, R[0][2])))
+    if abs(R[0][2]) < 0.9999999:
+        x = math.atan2(-R[1][2], R[2][2])
+        z = math.atan2(-R[0][1], R[0][0])
+    else:
+        x, z = math.atan2(R[2][1], R[1][1]), 0
+    return [round(math.degrees(v), 4) for v in (x, y, z)]
+
+
+def java_element(e, Ra, ta, pivot):
+    O = tuple(e["origin"])
+    Re = rot_zyx(e.get("rotation", [0, 0, 0]))
+    O2 = add(mat_vec(Ra, O), ta)
+    R2 = mat_mul(Ra, Re)
+    X = (R2[0][0], R2[1][0], R2[2][0])
+    Y = (R2[0][1], R2[1][1], R2[2][1])
+    Z = (R2[0][2], R2[1][2], R2[2][2])
+    ang = euler_zyx(X, Y, Z) if JAVA_ROTATION_ORDER == "ZYX" else euler_xyz(R2)
+    k = 1 / JAVA_SHRINK
+    o = [round((O2[i] - pivot[i]) * k + 8, 4) for i in range(3)]
+    frm = [round(o[i] + (e["from"][i] - O[i]) * k, 4) for i in range(3)]
+    to = [round(o[i] + (e["to"][i] - O[i]) * k, 4) for i in range(3)]
+    for v in frm + to:
+        assert -16 <= v <= 32, (e["name"], frm, to)
+    je = {"from": frm, "to": to, "faces": {}}
+    nz = [(i, a) for i, a in enumerate(ang) if abs(a) > 1e-3]
+    if nz:
+        if len(nz) == 1 and any(abs(nz[0][1] - s) < 1e-3 for s in (-45, -22.5, 22.5, 45)):
+            je["rotation"] = {"origin": o, "axis": "xyz"[nz[0][0]], "angle": round(nz[0][1], 3)}
+        else:
+            # Java 26.1+: свободный поворот по трём осям (тот же порядок, что в Blockbench)
+            je["rotation"] = {"origin": o, "x": ang[0], "y": ang[1], "z": ang[2]}
+    for f, fd in e["faces"].items():
+        je["faces"][f] = {"uv": [round(u * 16 / TEX, 4) for u in fd["uv"]], "texture": "#0"}
+    return je
+
+
+def export_java():
+    rp = os.path.join(PLUGIN, "resourcepack")
+    moved = {g for g, _ in PARTS.values() if g}
+    parts_yml = ["# Сгенерировано blockbench/mi8_helicopter/generate.py — не править вручную",
+                 f"blocks-per-unit: {BLOCKS_PER_UNIT}", f"display-scale: {JAVA_SHRINK * 16 * BLOCKS_PER_UNIT}", "parts:"]
+    files = {}
+    for part, (gname, pivot) in PARTS.items():
+        items = []
+        if gname:
+            g = GROUPS[gname]
+            pivot = tuple(g["origin"])
+            collect(g, I3, (0, 0, 0), items, set())
+        else:
+            collect(root, I3, (0, 0, 0), items, moved)
+        model = {"textures": {"0": "heli:item/mi8", "particle": "heli:item/mi8"},
+                 "elements": [java_element(e, Ra, ta, pivot) for e, Ra, ta in items]}
+        files[f"assets/heli/models/item/{part}.json"] = json.dumps(model, separators=(",", ":"))
+        files[f"assets/heli/items/{part}.json"] = json.dumps(
+            {"model": {"type": "minecraft:model", "model": f"heli:item/{part}"}})
+        pv = [round(c * BLOCKS_PER_UNIT, 5) for c in pivot]
+        parts_yml.append(f"  {part}: {{pivot: [{pv[0]}, {pv[1]}, {pv[2]}], elements: {len(items)}}}")
+    files["assets/heli/textures/item/mi8.png"] = tex_png
+    files["pack.mcmeta"] = json.dumps({"pack": {
+        "description": "Mi-8 helicopter (heli plugin)", "min_format": 69, "max_format": 999}}, indent=2)
+    zpath = os.path.join(PLUGIN, "src", "main", "resources", "mi8_resourcepack.zip")
+    os.makedirs(os.path.dirname(zpath), exist_ok=True)
+    with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in sorted(files.items()):
+            zi = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+            zi.compress_type = zipfile.ZIP_DEFLATED
+            z.writestr(zi, data)
+    with open(os.path.join(PLUGIN, "src", "main", "resources", "mi8_parts.yml"), "w", encoding="utf-8") as f:
+        f.write("\n".join(parts_yml) + "\n")
+    print("resource pack:", os.path.relpath(zpath, HERE), f"{os.path.getsize(zpath) // 1024} KB")
+
+
+export_java()

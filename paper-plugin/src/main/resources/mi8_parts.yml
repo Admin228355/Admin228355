@@ -1,0 +1,11 @@
+# Сгенерировано blockbench/mi8_helicopter/generate.py — не править вручную
+blocks-per-unit: 0.125
+display-scale: 8.0
+parts:
+  mi8_body: {pivot: [0.0, 2.5, 3.5], elements: 2644}
+  mi8_main_rotor: {pivot: [0.0, 4.175, -1.625], elements: 53}
+  mi8_tail_rotor: {pivot: [0.325, 4.6625, 13.475], elements: 18}
+  mi8_side_door: {pivot: [-1.4375, 0.875, -3.0], elements: 21}
+  mi8_cockpit_door: {pivot: [0.375, 0.875, -3.4], elements: 3}
+  mi8_rear_door_l: {pivot: [-1.35413, 0.875, 2.5], elements: 36}
+  mi8_rear_door_r: {pivot: [1.35413, 0.875, 2.5], elements: 35}

@@ -1,0 +1,20 @@
+name: Mi8Helicopter
+version: '${version}'
+main: ru.zona.heli.HeliPlugin
+api-version: '26.1'
+author: zona
+description: Управляемый вертолёт Ми-8 с коллизией, дверями, сиденьями и складом
+commands:
+  heli:
+    description: Управление вертолётами
+    usage: /heli <spawn|remove|list|repair|engine|pack>
+permissions:
+  heli.admin:
+    description: Спавн, удаление и ремонт вертолётов
+    default: op
+  heli.use:
+    description: Садиться в вертолёт, открывать двери и склад
+    default: true
+  heli.pilot:
+    description: Садиться в кресло пилота
+    default: true
