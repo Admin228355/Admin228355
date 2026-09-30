@@ -19,7 +19,16 @@ PLUGIN = os.path.join(LIB, "..", "paper-plugin")
 PACK_DIR = os.path.join(PLUGIN, "resourcepack")
 RNG = random.Random(1986)
 TEX = 256
+S = 1            # масштаб текстуры относительно раскладки 256x256
 img = [[(0, 0, 0, 0) for _ in range(TEX)] for _ in range(TEX)]
+
+
+def set_tex(size):
+    """Разрешение текстуры (256/512/1024). Раскладка атласа задаётся в координатах 256,
+    а рисование идёт в полном разрешении."""
+    global TEX, S, img
+    TEX, S = size, size // 256
+    img = [[(0, 0, 0, 0) for _ in range(TEX)] for _ in range(TEX)]
 MAT = {}
 elements = []
 FACE_AXES = {"north": (0, 1), "south": (0, 1), "east": (2, 1), "west": (2, 1), "up": (0, 2), "down": (0, 2)}
@@ -106,8 +115,121 @@ def fill(x0, y0, w, h, fn):
             put(x, y, r[:3], r[3] if len(r) == 4 else 255)
 
 def tile(name, u, v, w, h, whole, fn):
-    MAT[name] = (u, v, w, h, whole)
-    fill(u, v, w, h, fn)
+    """u,v,w,h — в раскладке 256; fn(x, y) получает пиксели полного разрешения (0..w*S)."""
+    MAT[name] = (u * S, v * S, w * S, h * S, whole)
+    fill(u * S, v * S, w * S, h * S, fn)
+
+
+# --- мелкий трафаретный шрифт 3x5 для надписей на обшивке
+FONT3 = {
+    "A": "010101111101101", "B": "110101110101110", "C": "011100100100011", "D": "110101101101110",
+    "E": "111100110100111", "F": "111100110100100", "G": "011100101101011", "H": "101101111101101",
+    "I": "111010010010111", "K": "101101110101101", "L": "100100100100111", "M": "101111111101101",
+    "N": "110101101101101", "O": "010101101101010", "P": "110101110100100", "R": "110101110101101",
+    "S": "011100010001110", "T": "111010010010010", "U": "101101101101111", "V": "101101101101010",
+    "W": "101101111111101", "X": "101101010101101", "Y": "101101010010010", "Z": "111001010100111",
+    "0": "111101101101111", "1": "010110010010111", "2": "110001010100111", "3": "110001010001110",
+    "4": "101101111001001", "5": "111100110001110", "6": "011100111101111", "7": "111001010010010",
+    "8": "111101111101111", "9": "111101111001110", "-": "000000111000000", " ": "000000000000000",
+    ".": "000000000000010", "/": "001001010100100",
+    "Д": "011101101111101", "П": "111101101101101", "У": "101101011001110", "Ь": "100100110101110",
+    "Г": "111100100100100",
+}
+for _cy, _la in zip("АВЕКМНОРСТХ", "ABEKMHOPCTX"):
+    FONT3[_cy] = FONT3[_la]
+
+
+def stencil(x0, y0, text, col, scale=1, rot=False):
+    """Пишет текст шрифтом 3x5 в img. rot=True — вертикально (по оси v)."""
+    cx = 0
+    for ch in text.upper():
+        g = FONT3.get(ch, FONT3[" "])
+        for gy in range(5):
+            for gx in range(3):
+                if g[gy * 3 + gx] == "1":
+                    for sy in range(scale):
+                        for sx in range(scale):
+                            px, py = cx + gx * scale + sx, gy * scale + sy
+                            if rot:
+                                put(x0 + py, y0 + px, col)
+                            else:
+                                put(x0 + px, y0 + py, col)
+        cx += 4 * scale
+
+
+def blend(x, y, c, a):
+    """Наложить цвет c с прозрачностью a (0..1)."""
+    if 0 <= x < TEX and 0 <= y < TEX:
+        o = img[y][x]
+        img[y][x] = (clamp(o[0] + (c[0] - o[0]) * a), clamp(o[1] + (c[1] - o[1]) * a),
+                     clamp(o[2] + (c[2] - o[2]) * a), o[3])
+
+
+def outline_cells(cells, uv_fn, col=(10, 10, 11), hi=(90, 93, 98), dashed=True, dash=(170, 172, 168)):
+    """Контур двери на развёртке: щель по краям, где соседняя клетка (i±1, k±1) — не дверь,
+    плюс пунктирная окантовка внутри."""
+    for (i, k) in cells:
+        u0, v0, u1, v1 = [int(round(v)) for v in uv_fn(i, k)]
+        u1 -= 1
+        v1 -= 1
+        edges = [((i - 1, k), [(u, v0) for u in range(u0, u1 + 1)], (0, 1)),
+                 ((i + 1, k), [(u, v1) for u in range(u0, u1 + 1)], (0, -1)),
+                 ((i, k - 1), [(u0, v) for v in range(v0, v1 + 1)], (1, 0)),
+                 ((i, k + 1), [(u1, v) for v in range(v0, v1 + 1)], (-1, 0))]
+        for nb, pts, (ix, iy) in edges:
+            if nb in cells:
+                continue
+            for (u, v) in pts:
+                for q in range(3):
+                    put(u + q * ix, v + q * iy, col)
+                put(u + 3 * ix, v + 3 * iy, hi)
+                if dashed and ((u + v) // 5) % 2 == 0:
+                    put(u + 8 * ix, v + 8 * iy, dash)
+                    put(u + 9 * ix, v + 9 * iy, dash)
+
+
+def text_px(u, v, text, col, scale=2, du=1, dv=1):
+    """Надпись в пиксельных координатах: du — направление «вниз» по строке, dv — направление чтения."""
+    cx = 0
+    for ch in text.upper():
+        g = FONT3.get(ch, FONT3[" "])
+        for gy in range(5):
+            for gx in range(3):
+                if g[gy * 3 + gx] == "1":
+                    for sy in range(scale):
+                        for sx in range(scale):
+                            put(u + du * (gy * scale + sy), v + dv * (cx + gx * scale + sx), col)
+        cx += 4 * scale
+
+
+def rivet(x, y, light, dark):
+    put(x, y, light)
+    blend(x + 1, y + 1, dark, 0.8)
+
+
+def check_inside(uuids, inside, margin=0.05):
+    """Проверка, что элементы не торчат из корпуса. inside(x, y, z, margin) -> bool.
+    Возвращает имена элементов, у которых хотя бы один угол снаружи."""
+    els = {e["uuid"]: e for e in elements}
+    bad = []
+    for u in uuids:
+        e = els[u]
+        R = rot_zyx(e.get("rotation", [0, 0, 0]))
+        O = e["origin"]
+        for cx in (e["from"][0], e["to"][0]):
+            for cy in (e["from"][1], e["to"][1]):
+                for cz in (e["from"][2], e["to"][2]):
+                    p = add(tuple(O), mat_vec(R, (cx - O[0], cy - O[1], cz - O[2])))
+                    if not inside(p[0], p[1], p[2], margin):
+                        bad.append((e["name"], tuple(round(v, 2) for v in p)))
+                        break
+                else:
+                    continue
+                break
+            else:
+                continue
+            break
+    return bad
 
 def in_poly(x, y, pts):
     ins = False
@@ -125,8 +247,8 @@ def face_uv(mat, size, face):
     if whole:
         return [u, v, u + w, v + h]
     au, av = FACE_AXES[face]
-    fw = max(0.5, min(w, size[au] * DENS))
-    fh = max(0.5, min(h, size[av] * DENS))
+    fw = max(0.5, min(w, size[au] * DENS * S))
+    fh = max(0.5, min(h, size[av] * DENS * S))
     ou, ov = RNG.uniform(0, w - fw), RNG.uniform(0, h - fh)
     q = lambda n: round(n * 4) / 4
     return [q(u + ou), q(v + ov), q(u + ou + fw), q(v + ov + fh)]
@@ -236,7 +358,9 @@ def loft(name, rings, centers, t, outer_fn, dest_fn, closed=True, inner="wall", 
             if dest is None:
                 continue
             inn = inner(i, k, c) if callable(inner) else inner
-            uid = panel(f"{name}_{i}_{k}", p0, p1, p2, p3, ref, t, outer_fn(i, k, c), inn, edge)
+            edg = edge(i, k, c) if callable(edge) else edge
+            th = t(i, k, c) if callable(t) else t
+            uid = panel(f"{name}_{i}_{k}", p0, p1, p2, p3, ref, th, outer_fn(i, k, c), inn, edg)
             if uid:
                 dest.append(uid)
 

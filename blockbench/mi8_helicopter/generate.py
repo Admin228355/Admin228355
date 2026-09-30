@@ -20,173 +20,121 @@ import math
 import os
 import random
 import struct
+import sys
 import uuid
 import zipfile
 import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
+from heli_lib import *  # noqa: E402,F401,F403
+import heli_lib as L  # noqa: E402
+
+L.set_tex(1024)
+S = L.S
+RNG = L.RNG
+RNG.seed(1986)
 PLUGIN = os.path.join(HERE, "..", "..", "paper-plugin")
-RNG = random.Random(1986)
-TEX = 256
 
 
-def new_uuid():
-    return str(uuid.UUID(int=RNG.getrandbits(128), version=4))
 
 
 # ---------------------------------------------------------------------------
 # Векторы
 # ---------------------------------------------------------------------------
-def add(a, b): return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
-def sub(a, b): return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
-def mul(a, s): return (a[0] * s, a[1] * s, a[2] * s)
-def dot(a, b): return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-def cross(a, b): return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
-def length(a): return math.sqrt(dot(a, a))
 
 
-def norm(a):
-    n = length(a)
-    return mul(a, 1 / n) if n > 1e-9 else (0, 0, 0)
 
 
-def lerp(a, b, t): return a + (b - a) * t
 
 
-def euler_zyx(X, Y, Z):
-    """Матрица со столбцами X,Y,Z -> углы Эйлера (градусы) в порядке ZYX (как в Blockbench)."""
-    m31, m32, m33, m21, m11 = X[2], Y[2], Z[2], X[1], X[0]
-    y = math.asin(max(-1, min(1, -m31)))
-    if abs(m31) < 0.9999999:
-        x = math.atan2(m32, m33)
-        z = math.atan2(m21, m11)
-    else:
-        x = 0
-        z = math.atan2(-Y[0], Y[1])
-    return [round(math.degrees(v), 4) for v in (x, y, z)]
 
 
 # ---------------------------------------------------------------------------
 # Текстура 256x256
 # ---------------------------------------------------------------------------
-img = [[(0, 0, 0, 0) for _ in range(TEX)] for _ in range(TEX)]
 
 
-def clamp(v):
-    return max(0, min(255, int(round(v))))
 
 
-def put(x, y, c, a=255):
-    if 0 <= x < TEX and 0 <= y < TEX:
-        img[y][x] = (clamp(c[0]), clamp(c[1]), clamp(c[2]), clamp(a))
 
 
-def get(x, y):
-    return img[y][x]
 
 
-def shade(c, k): return (c[0] * k, c[1] * k, c[2] * k)
-def mix(a, b, t): return tuple(a[i] + (b[i] - a[i]) * t for i in range(3))
 
 
-def noisy(c, amp):
-    n = RNG.uniform(-amp, amp)
-    return (c[0] + n, c[1] + n * 1.04, c[2] + n * 0.85)
 
 
-_P = list(range(512))
-random.Random(7).shuffle(_P)
 
 
-def _h(ix, iy, s):
-    return ((ix * 374761393 + iy * 668265263 + s * 982451653) & 0xFFFFFFFF) / 0xFFFFFFFF
 
 
-def vnoise(x, y, s=0):
-    ix, iy = math.floor(x), math.floor(y)
-    fx, fy = x - ix, y - iy
-    fx, fy = fx * fx * (3 - 2 * fx), fy * fy * (3 - 2 * fy)
-    a = lerp(_h(ix, iy, s), _h(ix + 1, iy, s), fx)
-    b = lerp(_h(ix, iy + 1, s), _h(ix + 1, iy + 1, s), fx)
-    return lerp(a, b, fy)
 
 
-def fbm(x, y, s=0, oct=4):
-    v, amp, tot = 0, 1, 0
-    for o in range(oct):
-        v += vnoise(x, y, s + o * 17) * amp
-        tot += amp
-        x, y, amp = x * 2.03, y * 2.03, amp * 0.5
-    return v / tot
 
 
-def fill(x0, y0, w, h, fn):
-    for y in range(y0, y0 + h):
-        for x in range(x0, x0 + w):
-            r = fn(x - x0, y - y0)
-            put(x, y, r[:3], r[3] if len(r) == 4 else 255)
 
 
-OLIVE = (82, 90, 54)
-OLIVE_D = (60, 67, 40)
-OLIVE_B = (92, 86, 56)
-RUST = (116, 66, 34)
-RUST_L = (152, 90, 44)
+OLIVE = (84, 93, 56)
+OLIVE_D = (61, 68, 41)
+OLIVE_B = (96, 90, 58)
+RUST = (112, 66, 36)
+RUST_L = (146, 88, 44)
 DARKM = (54, 56, 54)
-GLASS = (52, 70, 78)
-RED = (165, 36, 30)
-WHITE = (206, 204, 190)
+RED = (170, 34, 28)
+WHITE = (214, 212, 198)
+LINE = (38, 42, 26)
 
 
 def camo_color(s, t, seed=0):
     """Камуфляж + износ по координатам s,t (в «мировых» единицах)."""
-    n = fbm(s * 0.06, t * 0.06, seed)
+    n = fbm(s * 0.05, t * 0.05, seed)
+    edge = abs(n - 0.53)
     c = OLIVE if n < 0.53 else OLIVE_D
-    if 0.47 < n < 0.5:
+    if edge < 0.012:
+        c = mix(OLIVE, OLIVE_D, 0.5)                 # мягкая граница пятен
+    if 0.45 < n < 0.49:
         c = OLIVE_B
-    c = noisy(c, 5)
-    g = fbm(s * 0.35, t * 0.35, seed + 5)
+    c = noisy(c, 3)
+    g = fbm(s * 0.5, t * 0.5, seed + 5, 3)
     c = shade(c, 0.9 + g * 0.2)
-    r = fbm(s * 0.22, t * 0.22, seed + 9)
-    if r > 0.7:
-        c = mix(c, RUST if r < 0.75 else RUST_L, min(0.85, (r - 0.7) * 8))
+    fade = fbm(s * 0.9, t * 0.9, seed + 7, 2)
+    if fade > 0.7:
+        c = mix(c, (120, 124, 96), (fade - 0.7) * 1.6)   # выгоревшая краска
+    r = fbm(s * 0.18, t * 0.18, seed + 9)
+    if r > 0.72:
+        c = mix(c, RUST if r < 0.77 else RUST_L, min(0.8, (r - 0.72) * 7))
     return c
 
 
-# --- тайлы материалов (нижняя половина атласа) ---
-MAT = {}  # имя: (u, v, w, h, растягивать_целиком)
-
-
-def tile(name, u, v, w, h, whole, fn):
-    MAT[name] = (u, v, w, h, whole)
-    fill(u, v, w, h, fn)
-
-
 def glass_px(x, y):
-    c = noisy((70, 92, 102), 3)
-    if 6 <= (x + y) % 23 <= 8:
-        c = mix(c, (180, 200, 206), 0.4)
-    d = fbm(x * 0.3, y * 0.3, 44)
-    a = 165
-    if d > 0.72:
-        c, a = mix(c, (96, 88, 64), 0.35), 200
-    return c + (a,)
+    W = 32 * S
+    band = max(0.0, 1 - abs((x + y) - W * 0.9) / (W * 0.35))
+    c = mix((80, 98, 100), (180, 196, 196), band * 0.5)
+    a = 60 + band * 50
+    if fbm(x * 0.08, y * 0.08, 44, 3) > 0.8:
+        c, a = mix(c, (110, 100, 80), 0.3), 100
+    return c + (int(a),)
 
 
 tile("glass", 0, 128, 32, 32, False, glass_px)
+tile("clear", 240, 240, 16, 16, True, lambda x, y: (0, 0, 0, 0))
 
 
 def porthole_px(x, y):
-    d = math.hypot(x - 7.5, y - 7.5)
-    if d > 7.6:
+    d = math.hypot(x - 31.5, y - 31.5)
+    if d > 31.5:
         return (0, 0, 0, 0)
-    if d > 6.4:
-        return noisy((70, 76, 50), 4)
-    if d > 5.3:
-        return noisy((30, 31, 29), 3)
-    c = noisy(GLASS, 4)
-    if -2 <= x - y <= 0:
-        c = mix(c, (170, 190, 196), 0.5)
+    if d > 27:
+        a = math.atan2(y - 31.5, x - 31.5)
+        if abs(((a + math.pi) / (math.pi / 4)) % 1 - 0.5) < 0.12 and 28 < d < 30.5:
+            return (150, 152, 140)                   # болты рамки
+        return noisy((70, 78, 48), 3)
+    if d > 22:
+        return noisy((28, 29, 27), 2)                # резиновый уплотнитель
+    c = noisy((56, 76, 84), 3)
+    if -10 < (x - y) < -2:
+        c = mix(c, (190, 205, 210), 0.5)
     return c + (235,)
 
 
@@ -202,30 +150,19 @@ def star_poly(cx, cy, R, r):
     return pts
 
 
-def in_poly(x, y, pts):
-    ins = False
-    j = len(pts) - 1
-    for i in range(len(pts)):
-        xi, yi = pts[i]
-        xj, yj = pts[j]
-        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi + 1e-9) + xi:
-            ins = not ins
-        j = i
-    return ins
-
-
-_SO, _SI = star_poly(15.5, 16.5, 15.5, 6.2), star_poly(15.5, 16.5, 13.2, 5.2)
+_SO, _SM, _SI = star_poly(64, 66, 62, 25), star_poly(64, 66, 55, 22), star_poly(64, 66, 49, 19.5)
 
 
 def star_px(x, y):
     px, py = x + 0.5, y + 0.5
+    worn = fbm(x * 0.1, y * 0.1, 3, 3)
     if in_poly(px, py, _SI):
-        c = noisy(RED, 10)
-        if fbm(x * 0.4, y * 0.4, 3) > 0.7:
-            c = mix(c, OLIVE, 0.6)
-        return c
+        c = noisy(RED, 8)
+        return mix(c, OLIVE, 0.55) if worn > 0.72 else c
+    if in_poly(px, py, _SM):
+        return noisy(WHITE, 8) if worn < 0.76 else noisy(OLIVE, 4)
     if in_poly(px, py, _SO):
-        return noisy(WHITE, 10) if fbm(x * 0.5, y * 0.5, 4) < 0.72 else noisy(OLIVE, 6)
+        return noisy(RED, 8) if worn < 0.78 else noisy(OLIVE, 4)
     return (0, 0, 0, 0)
 
 
@@ -238,242 +175,173 @@ DIG = {
 
 
 def number_px(x, y):
+    sc = 7
     for i, d in enumerate("32"):
-        gx, gy = (x - 4 - i * 13) // 2, (y - 1) // 2
+        gx, gy = (x - 16 - i * 52) // sc, (y - 6) // sc
         if 0 <= gx < 5 and 0 <= gy < 7 and DIG[d][gy][gx] == "1":
-            if fbm(x * 0.5, y * 0.5, 8) > 0.72:
+            if fbm(x * 0.12, y * 0.12, 8, 3) > 0.74:
                 return (0, 0, 0, 0)
-            return noisy(WHITE, 8)
+            return noisy(WHITE, 6)
     return (0, 0, 0, 0)
 
 
 tile("number", 80, 128, 32, 16, True, number_px)
-tile("warn", 80, 144, 16, 16, True, lambda x, y: noisy((196, 44, 32), 8) if (y // 4) % 2 == 0 else noisy((218, 214, 200), 6))
-tile("red", 96, 144, 16, 16, False, lambda x, y: noisy(RED, 10))
-tile("tire", 112, 128, 32, 32, False, lambda x, y: noisy((30, 30, 29), 3) if (y % 4) else noisy((20, 20, 19), 2))
-tile("tireside", 144, 128, 32, 32, False, lambda x, y: noisy((36, 36, 34), 3))
-tile("metal", 176, 128, 32, 32, False, lambda x, y: shade(noisy(DARKM, 5), 0.85 + fbm(x * .2, y * .2, 5) * .3))
-tile("hull", 208, 128, 32, 32, False, lambda x, y: camo_color(x * 1.3, y * 1.3, 2))
-tile("rust", 240, 128, 16, 32, False, lambda x, y: noisy(mix(RUST, RUST_L, fbm(x * .4, y * .4, 6)), 10))
-tile("floor", 0, 160, 32, 32, False, lambda x, y: noisy((76, 76, 72), 4) if (x + 2 * y) % 6 == 0 else
-     mix(noisy((54, 54, 52), 4), (70, 60, 44), 0.5 if fbm(x * .3, y * .3, 9) > 0.62 else 0))
-tile("wall", 32, 160, 32, 32, False, lambda x, y: mix(noisy((100, 112, 98), 5), (72, 64, 50),
-                                                     max(0, fbm(x * .2, y * .2, 10) - 0.55) * 3))
-tile("canvas", 64, 160, 32, 32, False, lambda x, y: shade(noisy((114, 76, 48), 6), 0.8 if x % 8 == 0 else 1))
-tile("leather", 96, 160, 32, 32, False, lambda x, y: shade(noisy((60, 47, 38), 5), 0.85 if y % 6 == 0 else 1))
-_DIALS = [(5, 6, 3.5), (14, 6, 3.5), (23, 6, 3.5), (5, 16, 3), (13, 16, 3), (21, 16, 3), (28, 15, 2.2)]
+tile("warn", 80, 144, 16, 16, True, lambda x, y: noisy((200, 44, 32), 6) if ((x + y) // 12) % 2 == 0 else noisy((222, 218, 204), 5))
+tile("red", 96, 144, 16, 16, False, lambda x, y: noisy(RED, 8))
+
+
+def tire_px(x, y):
+    blk = ((x // 10) + (y // 14)) % 2
+    edge = (y % 14) < 2 or (x % 10) < 2
+    return noisy((20, 20, 19) if edge else ((34, 34, 32) if blk else (28, 28, 27)), 2)
+
+
+tile("tire", 112, 128, 32, 32, False, tire_px)
+tile("tireside", 144, 128, 32, 32, False, lambda x, y: noisy((36, 36, 34) if (y // 6) % 4 else (42, 42, 40), 2))
+tile("metal", 176, 128, 32, 32, False, lambda x, y: shade(noisy(DARKM, 3), 0.88 + fbm(x * 0.02, y * 0.4, 5, 2) * 0.24))
+
+
+def hull_tile_px(x, y):
+    if x % 64 in (0, 1) or y % 64 in (0, 1):
+        return LINE
+    if (x % 64 == 5 or y % 64 == 5) and (x + y) % 8 == 0:
+        return (128, 134, 100)
+    return camo_color(x * 0.3, y * 0.3, 2)
+
+
+tile("hull", 208, 128, 32, 32, False, hull_tile_px)
+tile("rust", 240, 128, 16, 32, False, lambda x, y: noisy(mix(RUST, RUST_L, fbm(x * .1, y * .1, 6)), 8))
+
+
+def floor_px(x, y):
+    if y % 64 < 2:
+        return (30, 30, 28)
+    if (x % 16 in (3, 4, 5)) and (y % 16 in (3, 4, 5)):
+        return noisy((92, 92, 86), 4)               # рифление
+    c = noisy((62, 62, 58), 3)
+    if fbm(x * 0.05, y * 0.05, 9, 3) > 0.62:
+        c = mix(c, (76, 64, 46), 0.5)               # грязь
+    return c
+
+
+tile("floor", 0, 160, 32, 32, False, floor_px)
+
+
+def wall_px(x, y):
+    if x % 48 < 4:
+        return noisy((78, 88, 76), 2) if x % 48 else (50, 56, 48)   # шпангоуты
+    if x % 48 == 4:
+        return (130, 140, 124)
+    if y % 32 in (8, 24) and x % 48 in (12, 36):
+        return (150, 150, 140)
+    c = noisy((104, 116, 100), 3)
+    s_ = fbm(x * 0.04, y * 0.04, 10, 3)
+    if s_ > 0.6:
+        c = mix(c, (74, 66, 50), (s_ - 0.6) * 2)
+    return c
+
+
+tile("wall", 32, 160, 32, 32, False, wall_px)
+
+
+def canvas_px(x, y):
+    # плетёные брезентовые ремни сидений
+    wx, wy = x % 24, y % 24
+    horiz = wy < 10
+    c = (118, 80, 50) if horiz else (104, 70, 44)
+    if (horiz and wx % 12 == 0) or (not horiz and wy % 12 == 0):
+        c = (84, 56, 34)
+    return noisy(c, 4)
+
+
+tile("canvas", 64, 160, 32, 32, False, canvas_px)
+tile("leather", 96, 160, 32, 32, False, lambda x, y: shade(noisy((62, 48, 38), 3), 0.85 if y % 24 < 2 else 1))
+_DIALS = [(20, 22, 15), (56, 22, 15), (92, 22, 15), (20, 62, 13), (54, 62, 13), (86, 62, 13), (114, 60, 9),
+          (20, 100, 11), (50, 100, 11), (80, 100, 11), (110, 100, 11)]
 
 
 def panel_px(x, y):
     for cx, cy, r in _DIALS:
         d = math.hypot(x + .5 - cx, y + .5 - cy)
-        if d < r - 0.8:
-            return (28, 30, 28) if abs((x - cx) - (y - cy) * 0.3) > 0.7 else (220, 220, 190)
+        if d < r - 2:
+            a = math.atan2(y - cy, x - cx)
+            if abs(d - (r - 4)) < 0.8 and int((a + math.pi) / (math.pi / 8)) % 2 == 0:
+                return (220, 220, 200)               # шкала
+            if abs((x - cx) * math.sin(0.7) - (y - cy) * math.cos(0.7)) < 0.9 and d < r - 4:
+                return (240, 220, 120)               # стрелка
+            return (20, 22, 20)
         if d < r:
-            return (150, 150, 140)
-    if y in (23, 24) and x % 3 == 1:
-        return (190, 50, 40)
-    if y in (27, 28) and x % 4 == 2:
-        return (200, 200, 190)
-    return noisy((26, 28, 26), 3)
+            return (140, 142, 134)
+    if y > 116 and x % 8 in (2, 3, 4) and y % 8 in (2, 3):
+        return (190, 50, 40) if (x // 8) % 3 == 0 else (180, 180, 170)
+    return noisy((74, 88, 84), 3)                    # серо-зелёная панель
 
 
 tile("panel", 128, 160, 32, 32, True, panel_px)
-tile("crate", 160, 160, 32, 32, True, lambda x, y: shade(noisy((126, 94, 58), 7), 0.65 if y % 8 in (0, 7) or x in (0, 1, 30, 31) else 1))
-tile("ammo", 192, 160, 32, 16, True, lambda x, y: (196, 172, 64) if y == 6 and 4 <= x <= 27 else shade(noisy((82, 88, 52), 5), 0.7 if x in (0, 31) or y in (0, 15) else 1))
-tile("soot", 192, 176, 32, 16, False, lambda x, y: noisy((30, 28, 26), 5))
-tile("grille", 224, 160, 32, 32, True, lambda x, y: (16, 16, 15) if x % 3 == 0 or y % 3 == 0 else noisy((48, 50, 46), 4))
-tile("chrome", 0, 192, 32, 16, False, lambda x, y: noisy((156, 156, 150), 8))
-tile("moss", 32, 192, 32, 32, False, lambda x, y: noisy((72, 86, 38), 10) if fbm(x * .3, y * .3, 12) > 0.45 else noisy((86, 68, 44), 8))
-tile("cable", 64, 192, 32, 16, False, lambda x, y: noisy((38, 46, 36), 5) if (x + y) % 4 else (20, 20, 20))
-tile("bladestrip", 96, 192, 128, 8, True, lambda x, y: shade(camo_color(x * 0.6, y * 2, 21), 0.8 if y in (0, 7) else (0.92 if x % 16 == 0 else 1)))
-tile("bladeedge", 96, 200, 128, 8, False, lambda x, y: noisy((64, 68, 58), 4))
 
 
-def intake_px(x, y):
-    d = math.hypot(x - 15.5, y - 15.5)
-    ang = math.atan2(y - 15.5, x - 15.5)
-    if d < 4:
-        return noisy((70, 72, 70), 5)
-    if int((ang + math.pi) / (2 * math.pi) * 18) % 2 == 0:
-        return noisy((22, 22, 21), 3)
-    return noisy((42, 43, 41), 3)
+def crate_px(x, y):
+    if y % 32 < 2 or x < 3 or x > 124:
+        return (70, 52, 30)
+    c = noisy((134, 100, 62), 6)
+    if fbm(x * 0.3, y * 0.02, 13, 2) > 0.6:
+        c = shade(c, 0.85)                           # волокна дерева
+    return c
 
 
-tile("intake", 224, 192, 32, 32, True, intake_px)
-tile("exhaust", 96, 208, 32, 16, False, lambda x, y: mix(noisy((64, 60, 54), 6), RUST, 0.35 if fbm(x * .3, y * .3, 31) > 0.6 else 0))
-tile("interior_dark", 0, 208, 32, 16, False, lambda x, y: noisy((40, 44, 40), 4))
-tile("glass_frame", 64, 208, 32, 16, False, lambda x, y: noisy((58, 64, 42), 5))
+tile("crate", 160, 160, 32, 32, True, crate_px)
+L.stencil(160 * S + 22, 160 * S + 50, "OTK", (40, 30, 20), scale=4)
+
+
+def ammo_px(x, y):
+    if x < 4 or y < 4 or x > 123 or y > 59:
+        return (50, 56, 34)
+    if 24 <= y <= 28 and 16 <= x <= 111:
+        return (200, 176, 66)
+    return noisy((84, 92, 54), 3)
+
+
+tile("ammo", 192, 160, 32, 16, True, ammo_px)
+tile("soot", 192, 176, 32, 16, False, lambda x, y: noisy((30, 28, 26), 4))
+tile("grille", 224, 160, 32, 32, True, lambda x, y: (16, 16, 15) if x % 6 < 2 or y % 6 < 2 else noisy((50, 52, 48), 3))
+tile("chrome", 0, 192, 32, 16, False, lambda x, y: shade(noisy((160, 160, 154), 6), 0.9 + fbm(x * 0.02, y * 0.5, 14, 2) * 0.2))
+tile("moss", 32, 192, 32, 32, False, lambda x, y: noisy((72, 88, 38), 8) if fbm(x * .08, y * .08, 12) > 0.45 else noisy((86, 68, 44), 6))
+tile("cable", 64, 192, 32, 16, False, lambda x, y: noisy((40, 48, 38), 3) if (x + y) % 12 > 2 else (20, 20, 20))
+tile("bladestrip", 96, 192, 128, 8, True, lambda x, y: (noisy((200, 44, 32), 6) if 470 < x < 490 else noisy((222, 218, 204), 5)) if x > 470
+     else shade(camo_color(x * 0.15, y * 0.5, 21), 0.75 if y < 3 or y > 28 else (1.12 if y < 7 else 1)))
+tile("bladeedge", 96, 200, 128, 8, False, lambda x, y: noisy((66, 70, 58), 3))
+tile("intake", 224, 192, 32, 32, True, lambda x, y: (22, 22, 21) if (x // 8 + y // 8) % 2 else (44, 45, 43))
+tile("exhaust", 96, 208, 32, 16, False, lambda x, y: mix(noisy((64, 60, 54), 4), RUST, 0.35 if fbm(x * .08, y * .08, 31) > 0.6 else 0))
+tile("interior_dark", 0, 208, 32, 16, False, lambda x, y: noisy((42, 46, 42), 3))
+tile("glass_frame", 64, 208, 32, 16, False, lambda x, y: noisy((60, 66, 44), 3))
 
 # ---------------------------------------------------------------------------
 # Кубы
 # ---------------------------------------------------------------------------
-elements = []
-FACE_AXES = {"north": (0, 1), "south": (0, 1), "east": (2, 1), "west": (2, 1), "up": (0, 2), "down": (0, 2)}
-DENS = 2.0  # пикселей текстуры на единицу модели для «не целых» материалов
 
 
-def face_uv(mat, size, face):
-    u, v, w, h, whole = MAT[mat]
-    if whole:
-        return [u, v, u + w, v + h]
-    au, av = FACE_AXES[face]
-    fw = max(0.5, min(w, size[au] * DENS))
-    fh = max(0.5, min(h, size[av] * DENS))
-    ou, ov = RNG.uniform(0, w - fw), RNG.uniform(0, h - fh)
-    q = lambda n: round(n * 4) / 4
-    return [q(u + ou), q(v + ov), q(u + ou + fw), q(v + ov + fh)]
 
 
-def make_el(name, frm, to, faces, origin, rot):
-    size = [t - f for f, t in zip(frm, to)]
-    fdict = {}
-    for f in ("north", "east", "south", "west", "up", "down"):
-        spec = faces[f]
-        uv = spec if isinstance(spec, list) else face_uv(spec, size, f)
-        fdict[f] = {"uv": [round(x, 3) for x in uv], "texture": 0}
-    el = {"name": name, "box_uv": False, "rescale": False, "locked": False,
-          "render_order": "default", "allow_mirror_modeling": True,
-          "from": [round(x, 4) for x in frm], "to": [round(x, 4) for x in to],
-          "autouv": 0, "color": RNG.randrange(8), "origin": [round(x, 4) for x in origin],
-          "faces": fdict, "type": "cube", "uuid": new_uuid()}
-    if rot and any(abs(r) > 1e-4 for r in rot):
-        el["rotation"] = rot
-    elements.append(el)
-    return el["uuid"]
 
 
-def cube(name, frm, to, mat="hull", faces=None, origin=None, rot=None):
-    faces = faces or {}
-    a = [min(p, q) for p, q in zip(frm, to)]
-    b = [max(p, q) for p, q in zip(frm, to)]
-    fs = {f: faces.get(f, mat) for f in FACE_AXES}
-    return make_el(name, a, b, fs, origin or [(p + q) / 2 for p, q in zip(a, b)], rot)
 
 
-def ocube(name, O, X, Y, Z, lo, hi, faces):
-    """Куб в локальном базисе (X,Y,Z) с началом O; lo/hi — локальные границы."""
-    frm = [O[i] + lo[i] for i in range(3)]
-    to = [O[i] + hi[i] for i in range(3)]
-    return make_el(name, frm, to, faces, list(O), euler_zyx(X, Y, Z))
 
 
-def basis_from(dirz, hint=(0, 1, 0)):
-    Z = norm(dirz)
-    if abs(dot(Z, norm(hint))) > 0.95:
-        hint = (1, 0, 0)
-    X = norm(cross(hint, Z))
-    Y = cross(Z, X)
-    return X, Y, Z
 
 
-def rod(name, p0, p1, r, mat="metal"):
-    """Стержень из двух квадратных кубов, повёрнутых на 45° — восьмигранник."""
-    X, Y, Z = basis_from(sub(p1, p0))
-    L = length(sub(p1, p0))
-    O = mul(add(p0, p1), 0.5)
-    s = r * 0.924
-    out = []
-    for k, ang in enumerate((0, 45)):
-        a = math.radians(ang)
-        Xa = add(mul(X, math.cos(a)), mul(Y, math.sin(a)))
-        Ya = cross(Z, Xa)
-        out.append(ocube(f"{name}_{k}", O, Xa, Ya, Z, (-s, -s, -L / 2), (s, s, L / 2),
-                         {f: mat for f in FACE_AXES}))
-    return out
 
 
-def disc(name, C, normal, r, t, mat="metal", face_mat=None, n=6):
-    """Круглый диск из n тонких прямоугольников, повёрнутых вокруг нормали
-    (объединение даёт почти идеальный 4n-угольник без торчащих углов)."""
-    X, Y, Z = basis_from(normal)
-    hw = r * math.tan(math.pi / (2 * n))
-    out = []
-    fm = face_mat or mat
-    for k in range(n):
-        a = math.pi * k / n
-        Xa = add(mul(X, math.cos(a)), mul(Y, math.sin(a)))
-        Ya = cross(Z, Xa)
-        out.append(ocube(f"{name}_{k}", C, Xa, Ya, Z, (-r, -hw, -t / 2), (r, hw, t / 2),
-                         {"north": fm, "south": fm, "east": mat, "west": mat, "up": mat, "down": mat}))
-    return out
 
 
-def panel(name, p0, p1, p2, p3, ref, t, outer, inner="wall", edge="hull"):
-    """Панель обшивки по четырёхугольнику p0-p1 (одно сечение), p3-p2 (следующее).
-    Внешняя грань (up) лежит на поверхности, толщина уходит внутрь.
-    outer: имя материала или uv-прямоугольник [u0,v0,u1,v1] (u вдоль p0->p1, v вдоль p0->p3)."""
-    u = mul(add(sub(p1, p0), sub(p2, p3)), 0.5)
-    v = mul(add(sub(p3, p0), sub(p2, p1)), 0.5)
-    if length(u) < 0.03 or length(v) < 0.03:
-        return None
-    c = mul(add(add(p0, p1), add(p2, p3)), 0.25)
-    X = norm(u)
-    Z = norm(sub(v, mul(X, dot(v, X))))
-    Y = cross(Z, X)
-    flipped = False
-    if dot(Y, sub(c, ref)) < 0:
-        X, Y, flipped = mul(X, -1), mul(Y, -1), True
-    w = length(u) * 1.03 + 0.06
-    L = dot(v, Z) + 0.12
-    if isinstance(outer, list) and flipped:
-        outer = [outer[2], outer[1], outer[0], outer[3]]
-    return ocube(name, c, X, Y, Z, (-w / 2, -t, -L / 2), (w / 2, 0, L / 2),
-                 {"up": outer, "down": inner, "north": edge, "south": edge, "east": edge, "west": edge})
 
 
-def loft(name, rings, centers, t, outer_fn, dest_fn, closed=True, inner="wall", edge="hull"):
-    """rings[i] — список точек сечения i. outer_fn(i,k,c) -> материал или uv.
-    dest_fn(i,k,c) -> список, куда положить uuid (или None — пропустить)."""
-    n = len(rings[0])
-    segs = n if closed else n - 1
-    for i in range(len(rings) - 1):
-        ref = mul(add(centers[i], centers[i + 1]), 0.5)
-        for k in range(segs):
-            k1 = (k + 1) % n
-            p0, p1, p2, p3 = rings[i][k], rings[i][k1], rings[i + 1][k1], rings[i + 1][k]
-            c = mul(add(add(p0, p1), add(p2, p3)), 0.25)
-            dest = dest_fn(i, k, c)
-            if dest is None:
-                continue
-            inn = inner(i, k, c) if callable(inner) else inner
-            uid = panel(f"{name}_{i}_{k}", p0, p1, p2, p3, ref, t, outer_fn(i, k, c), inn, edge)
-            if uid:
-                dest.append(uid)
 
 
-def ring_frame(C, T, ref):
-    e1 = norm(sub(ref, mul(T, dot(ref, T))))
-    e2 = cross(T, e1)
-    return e1, e2
 
 
-def tube(name, path, radii, n, dest, outer="hull", inner="soot", t=0.35, ref=(0, 1, 0), edge="hull"):
-    """Труба по ломаной path; radii — (r1, r2) по осям e1/e2 на каждую точку."""
-    rings, centers = [], []
-    for i, C in enumerate(path):
-        if i == 0:
-            T = sub(path[1], path[0])
-        elif i == len(path) - 1:
-            T = sub(path[-1], path[-2])
-        else:
-            T = add(norm(sub(path[i], path[i - 1])), norm(sub(path[i + 1], path[i])))
-        T = norm(T)
-        e1, e2 = ring_frame(C, T, ref)
-        r1, r2 = radii[i] if isinstance(radii[i], tuple) else (radii[i], radii[i])
-        rings.append([add(C, add(mul(e1, r1 * math.cos(2 * math.pi * k / n)),
-                                 mul(e2, r2 * math.sin(2 * math.pi * k / n)))) for k in range(n)])
-        centers.append(C)
-    loft(name, rings, centers, t, lambda i, k, c: outer, lambda i, k, c: dest, inner=inner, edge=edge)
 
 
-def group(name, origin, children, rotation=None):
-    g = {"name": name, "origin": [round(x, 4) for x in origin], "color": 0, "uuid": new_uuid(), "export": True,
-         "mirror_uv": False, "isOpen": False, "locked": False, "visibility": True,
-         "autouv": 0, "children": children}
-    if rotation:
-        g["rotation"] = rotation
-    return g
 
 
 # ---------------------------------------------------------------------------
@@ -507,30 +375,6 @@ STATIONS = [
 ]
 
 
-def pchip(xs, ys):
-    n = len(xs)
-    h = [xs[i + 1] - xs[i] for i in range(n - 1)]
-    d = [(ys[i + 1] - ys[i]) / h[i] for i in range(n - 1)]
-    m = [0.0] * n
-    m[0], m[-1] = d[0], d[-1]
-    for i in range(1, n - 1):
-        if d[i - 1] * d[i] <= 0:
-            m[i] = 0
-        else:
-            w1, w2 = 2 * h[i] + h[i - 1], h[i] + 2 * h[i - 1]
-            m[i] = (w1 + w2) / (w1 / d[i - 1] + w2 / d[i])
-
-    def f(x):
-        if x <= xs[0]:
-            return ys[0]
-        if x >= xs[-1]:
-            return ys[-1]
-        i = max(j for j in range(n - 1) if xs[j] <= x)
-        t = (x - xs[i]) / h[i]
-        h00, h10 = 2 * t ** 3 - 3 * t ** 2 + 1, t ** 3 - 2 * t ** 2 + t
-        h01, h11 = -2 * t ** 3 + 3 * t ** 2, t ** 3 - t ** 2
-        return h00 * ys[i] + h10 * h[i] * m[i] + h01 * ys[i + 1] + h11 * h[i] * m[i + 1]
-    return f
 
 
 def make_profile(stations):
@@ -592,26 +436,25 @@ Z_RINGS = [-48.4, -47.9, -47.0, -46.0, -44.8, -43.4, -41.8, -40.0, -38.0, -36.0,
            16.0, 20.0, 23.0, 26.0, 29.0, 32.0, 35.0, 38.0, 42.0, 47.0, 53.0, 59.0, 65.0, 71.0,
            77.0, 83.0, 89.0, 95.0, 100.0, 104.0, 105.6]
 Z_SPLIT = 38.0          # граница развёрток A (кабина) и B (балка)
-REG_A = (0, 0, 128, 128, -48.4, Z_SPLIT)
-REG_B = (128, 0, 64, 128, Z_SPLIT, 105.6)
+REG_A = (0, 0, 128 * S, 128 * S, -48.4, Z_SPLIT)
+REG_B = (128 * S, 0, 64 * S, 128 * S, Z_SPLIT, 105.6)
 HULL_T = 0.6
+GLASS_T = 0.15
 
 fus_panels, side_door_panels, rear_L_panels, rear_R_panels = [], [], [], []
-door_rects = {"side": [], "rear_L": [], "rear_R": []}
+DOOR_CELLS = {"side": set(), "rear_L": set(), "rear_R": set()}
 
 
 def is_glass(i, k, c):
     x, y, z = c
-    if -38.0 <= z <= -36.0 or -28.5 <= z:
-        return False  # стойки
+    if -28.5 <= z:
+        return False
     if -47.2 <= z <= -41.8 and 7.6 <= y <= 12.6 and abs(x) > 1.2:
         return True   # нижнее остекление носа
     if -47.6 <= z <= -28.5 and 15.0 <= y <= 26.6:
         if -36 < z and y > 25.0:
             return False
-        if k % 4 == 0 or -44.8 <= z <= -43.4:
-            return False  # рама остекления
-        return True
+        return True       # рамы — тонкие стержни (см. glass_frames), чтобы пилоту было видно
     return False
 
 
@@ -627,11 +470,11 @@ def hull_uv(i, k):
 def hull_dest(i, k, c):
     x, y, z = c
     if x < 0 and -24 < z < -15 and 8 < y < 24.5:
-        door_rects["side"].append(hull_uv(i, k))
+        DOOR_CELLS["side"].add((i, k))
         return side_door_panels
     if 20 < z < Z_SPLIT and y < 18.5:
         key = "rear_L" if x < 0 else "rear_R"
-        door_rects[key].append(hull_uv(i, k))
+        DOOR_CELLS[key].add((i, k))
         return rear_L_panels if x < 0 else rear_R_panels
     return fus_panels
 
@@ -642,14 +485,31 @@ def hull_outer(i, k, c):
 
 def hull_inner(i, k, c):
     if is_glass(i, k, c):
-        return "glass"
+        return "clear"      # изнутри стекло полностью прозрачное
     return "wall" if c[2] < 36 else "interior_dark"
 
 
 rings = [[se_point(z, th) for th in THETAS] for z in Z_RINGS]
 centers = [(0, (PROF(z)[1] + PROF(z)[2]) / 2, z) for z in Z_RINGS]
-loft("hull", rings, centers, HULL_T, hull_outer, hull_dest, inner=hull_inner)
+loft("hull", rings, centers, lambda i, k, c: GLASS_T if is_glass(i, k, c) else HULL_T, hull_outer, hull_dest,
+     inner=hull_inner, edge=lambda i, k, c: "clear" if is_glass(i, k, c) else "hull")
 fus_panels += disc("nose_cap", (0, 9.95, -48.5), (0, 0, 1), 0.9, 0.3, "hull")
+
+# тонкие рамы остекления вместо широких полос обшивки
+glass_frames = []
+_gz = [z for z in Z_RINGS if -47.6 <= z <= -28.5]
+for kk in range(0, NSEG, 4):
+    for za, zb in zip(_gz, _gz[1:]):
+        pa, pb = se_point(za, THETAS[kk]), se_point(zb, THETAS[kk])
+        if 14.5 <= (pa[1] + pb[1]) / 2 <= 27 or (7.2 <= (pa[1] + pb[1]) / 2 <= 13 and zb <= -41.8):
+            glass_frames += rod("glass_frame", pa, pb, 0.2, "glass_frame")
+for zf in (-44.8, -37.0, -28.5):
+    ring_pts = [se_point(zf, th) for th in THETAS]
+    for kk in range(NSEG):
+        pa, pb = ring_pts[kk], ring_pts[(kk + 1) % NSEG]
+        if 14.5 <= (pa[1] + pb[1]) / 2 <= 27:
+            glass_frames += rod("glass_arch", pa, pb, 0.22, "glass_frame")
+fus_panels += glass_frames
 fus_panels += disc("boom_end_cap", (0, 23.6, 105.7), (0, 0, 1), 0.8, 0.3, "hull")
 
 
@@ -664,65 +524,72 @@ def theta_at(kf):
 
 PANEL_Z = [-38, -28.5, -24, -15, -5, 5.5, 16, 26, 38, 53, 71, 89]
 PANEL_Y = [9.5, 24.8]
-STREAKS = [(RNG.uniform(-44, 100), RNG.uniform(14, 27), RNG.uniform(3, 9), RNG.choice((-1, 1))) for _ in range(26)]
-
-
-def hull_px(x, y, z, seed):
-    c = camo_color(z + (0 if x < 0 else 300), y * 1.4, seed)
-    # грязь снизу и светлое брюхо
-    if y < 9:
-        c = mix(c, (84, 74, 52), min(0.55, (9 - y) * 0.12))
-    if y < 6.2:
-        c = mix(c, (98, 104, 86), 0.5)
-    # копоть за выхлопными трубами
-    if False:  # копоть от выхлопа больше не нужна
-        s = math.exp(-(z + 2) / 26) * max(0, min(1, (y - 21) / 5))
-        c = mix(c, (30, 28, 26), s * 0.75 * (0.7 + 0.3 * fbm(z * .5, y * .5, 30)))
-    # потёки ржавчины
-    for sz, sy, sl, sd in STREAKS:
-        if (x < 0) == (sd < 0) and abs(z - sz) < 0.45 and sy - sl < y < sy:
-            c = mix(c, RUST, 0.4 * (y - (sy - sl)) / sl + 0.1)
-    # швы панелей и заклёпки
-    tex_z = 0.34 if z < Z_SPLIT else 0.26
-    for pz in PANEL_Z:
-        if abs(z - pz) < tex_z:
-            c = shade(c, 0.72)
-    for py in PANEL_Y:
-        if abs(y - py) < 0.28 and z < 36:
-            c = shade(c, 0.78 if (int(z * 1.5) % 2) else 1.15)
-    return c
+STREAKS = [(RNG.uniform(-44, 100), RNG.uniform(14, 27), RNG.uniform(3, 9), RNG.choice((-1, 1))) for _ in range(30)]
 
 
 def paint_region(reg, seed):
     u0, v0, w, h, za, zb = reg
+    dz = (zb - za) / h
     for py in range(h):
         z = za + (zb - za) * (py + 0.5) / h
+        pts = [se_point(z, theta_at((px + 0.5) / w * NSEG)) for px in range(w)]
+        near = min(PANEL_Z, key=lambda pz: abs(z - pz))
+        dzl = z - near
         for px in range(w):
-            kf = (px + 0.5) / w * NSEG
-            x, y, _ = se_point(z, theta_at(kf))
-            put(u0 + px, v0 + py, hull_px(x, y, z, seed))
+            x, y, _ = pts[px]
+            dy = max(0.02, abs(pts[min(w - 1, px + 1)][1] - pts[max(0, px - 1)][1]) / 2)
+            c = camo_color(z + (0 if x < 0 else 300), y * 1.4, seed)
+            if y < 9:
+                c = mix(c, (84, 74, 52), min(0.55, (9 - y) * 0.12))
+            if y < 6.2:
+                c = mix(c, (98, 104, 86), 0.5)              # светлое брюхо
+            for sz, sy, sl, sd in STREAKS:
+                if (x < 0) == (sd < 0) and abs(z - sz) < max(0.25, dz * 1.5) and sy - sl < y < sy:
+                    c = mix(c, RUST, 0.35 * (y - (sy - sl)) / sl + 0.08)
+            # швы с фаской и заклёпки
+            if abs(dzl) < dz:
+                c = LINE
+            elif 0 < dzl < dz * 2.2:
+                c = shade(c, 1.18)
+            elif dz * 3 < abs(dzl) < dz * 4 and px % 6 == 0:
+                c = (140, 146, 108)
+            if z < 36:
+                for pyl in PANEL_Y:
+                    dd = y - pyl
+                    if abs(dd) < dy:
+                        c = LINE
+                    elif dy * 3 < abs(dd) < dy * 4 and int(z / dz) % 6 == 0:
+                        c = (140, 146, 108)
+            put(u0 + px, v0 + py, c)
 
 
 paint_region(REG_A, 11)
 paint_region(REG_B, 12)
+for cells in DOOR_CELLS.values():
+    L.outline_cells(cells, hull_uv, col=(30, 32, 20), hi=(120, 128, 92), dash=(200, 196, 170))
 
 
-def outline_rects(rects, col=(34, 36, 26)):
-    if not rects:
-        return
-    us = [min(r[0], r[2]) for r in rects] + [max(r[0], r[2]) for r in rects]
-    vs = [r[1] for r in rects] + [r[3] for r in rects]
-    x0, x1, y0, y1 = int(round(min(us))), int(round(max(us))) - 1, int(round(min(vs))), int(round(max(vs))) - 1
-    for x in range(x0, x1 + 1):
-        for y in (y0, y1):
-            put(x, y, col)
-    for y in range(y0, y1 + 1):
-        for x in (x0, x1):
-            put(x, y, col)
+def side_px(side, z, y):
+    """Пиксель развёртки для точки борта (side = -1 левый, 1 правый) на высоте y."""
+    reg = REG_A if z <= Z_SPLIT else REG_B
+    u0, v0, w, h, za, zb = reg
+    best, bu = 1e9, 0
+    for px in range(w):
+        x, yy, _ = se_point(z, theta_at((px + 0.5) / w * NSEG))
+        if x * side > 0 and abs(yy - y) < best:
+            best, bu = abs(yy - y), px
+    return u0 + bu, int(v0 + h * (z - za) / (zb - za))
 
 
-for key in door_rects:
-    outline_rects(door_rects[key])
+def text_side(side, z, y, text, scale=3, col=(220, 216, 196)):
+    u, v = side_px(side, z, y)
+    L.text_px(u, v, text, col, scale, du=1 if side > 0 else -1, dv=-1 if side > 0 else 1)
+
+
+text_side(-1, -23.5, 24.2, "ВХОД", 3)
+for sd in (-1, 1):
+    text_side(sd, 86 if sd < 0 else 93, 24.3, "ОПАСНО", 2, (200, 60, 44))
+    text_side(sd, 2 if sd < 0 else 9, 8.2, "НЕ СТУПАТЬ", 2)
 
 # ---------------------------------------------------------------------------
 # Декали (иллюминаторы, звёзды, номер) — тонкие кубы по касательной к обшивке
@@ -809,13 +676,11 @@ cap("bulkhead", -27.2, 0.8, fus_misc, "wall", hole=(-3, 3, 7, 23.2))
 fus_misc += rod("door_rail", (-11.9, 25.2, -24.5), (-11.9, 25.2, -4.5), 0.4, "metal")
 fus_misc.append(cube("door_step", [-13, 4.6, -23], [-10.6, 5.2, -16], "metal"))
 fus_misc += rod("hoist_arm", (-10.8, 26.2, -22), (-15.2, 26.6, -22), 0.5, "metal")
-fus_misc += rod("pitot_L", (-5.2, 12.8, -45.5), (-5.2, 12.8, -53), 0.25, "chrome")
-fus_misc += rod("pitot_R", (5.2, 12.8, -45.5), (5.2, 12.8, -53), 0.25, "chrome")
 fus_misc += rod("antenna_top", (0, 28, -6), (0, 32, -4.5), 0.2, "metal")
 fus_misc += rod("antenna_belly", (0, 5.2, 10), (0, 2.5, 11.5), 0.2, "metal")
 fus_misc += disc("beacon_red", (0, 28.6, 18.5), (0, 1, 0), 0.9, 0.8, "red")
-fus_misc += rod("wiper_L", (-3, 15.8, -40.6), (-6, 20.5, -38.1), 0.15, "metal")
-fus_misc += rod("wiper_R", (3, 15.8, -40.6), (6, 20.5, -38.1), 0.15, "metal")
+fus_misc += rod("wiper_L", (-2.5, 15.3, -41.3), (-5.0, 16.9, -40.6), 0.12, "metal")
+fus_misc += rod("wiper_R", (2.5, 15.3, -41.3), (5.0, 16.9, -40.6), 0.12, "metal")
 fus_misc += rod("mirror_arm", (-9.6, 16, -41), (-12.5, 16.6, -42), 0.2, "metal")
 fus_misc.append(cube("mirror", [-13.3, 15.8, -42.6], [-12.3, 17.4, -42.3], "metal", origin=[-12.8, 16.6, -42.4], rot=[0, 20, 0]))
 _winch = []
@@ -826,9 +691,9 @@ fus_misc += _winch
 # Кабина пилотов (интерьер)
 # ---------------------------------------------------------------------------
 ck = []
-ck.append(cube("instrument_panel", [-7.8, 13, -41.0], [7.8, 18.4, -40.2], "metal", {"south": "panel"},
-               origin=[0, 13, -40.6], rot=[-18, 0, 0]))
-ck.append(cube("panel_hood", [-8, 18.2, -41.8], [8, 19.0, -39.0], "leather", origin=[0, 18.6, -40.4], rot=[-8, 0, 0]))
+ck.append(cube("instrument_panel", [-7.4, 10.8, -41.0], [7.4, 15.2, -40.2], "metal", {"south": "panel"},
+               origin=[0, 10.8, -40.6], rot=[-18, 0, 0]))
+ck.append(cube("panel_hood", [-7.4, 15.0, -41.6], [7.4, 15.7, -39.2], "leather", origin=[0, 15.3, -40.4], rot=[-8, 0, 0]))
 ck.append(cube("center_console", [-1.6, 7, -40], [1.6, 12, -31], "metal", {"up": "panel"}))
 ck.append(cube("overhead_panel", [-3, 25.2, -36], [3, 26.2, -29], "metal", {"down": "panel"}))
 for side, x in (("L", -4.6), ("R", 4.6)):
@@ -1066,10 +931,6 @@ index(root)
 # ---------------------------------------------------------------------------
 
 
-def kf(channel, t, xyz, interp="linear"):
-    return {"channel": channel, "data_points": [{"x": str(round(xyz[0], 3)), "y": str(round(xyz[1], 3)),
-                                                  "z": str(round(xyz[2], 3))}],
-            "uuid": new_uuid(), "time": round(t, 4), "color": -1, "interpolation": interp}
 
 
 def animation(name, length, loop, tracks):
@@ -1086,30 +947,10 @@ def animation(name, length, loop, tracks):
             "start_delay": "", "loop_delay": "", "animators": animators}
 
 
-def spin(axis, length, turns):
-    v = lambda a: tuple(a if i == axis else 0 for i in range(3))
-    return [(0, v(0)), (length, v(360 * turns))]
 
 
-def ramp_spin(axis, t0, t1, max_dps, speed_up=True, step=0.25):
-    pts, dur = [], t1 - t0
-    a = max_dps / dur
-    for i in range(int(round(dur / step)) + 1):
-        t = i * step
-        ang = 0.5 * a * t * t if speed_up else max_dps * t - 0.5 * a * t * t
-        pts.append((t0 + t, tuple(ang if j == axis else 0 for j in range(3))))
-    return pts
 
 
-def wave(axes, length, n, phase=0.0, base=(0, 0, 0)):
-    pts = []
-    for i in range(n + 1):
-        t = length * i / n
-        v = list(base)
-        for axis, amp, fm in axes:
-            v[axis] += amp * math.sin(2 * math.pi * fm * t / length + phase)
-        pts.append((t, tuple(v), "catmullrom"))
-    return pts
 
 
 Z3 = (0, 0, 0)
@@ -1211,44 +1052,34 @@ anims = [
 # ---------------------------------------------------------------------------
 
 
-def png_bytes():
-    raw = b"".join(b"\x00" + b"".join(bytes(p) for p in row) for row in img)
 
-    def chunk(t, d):
-        return struct.pack(">I", len(d)) + t + d + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
-    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", TEX, TEX, 8, 6, 0, 0, 0))
-            + chunk(b"IDAT", zlib.compress(raw, 9)) + chunk(b"IEND", b""))
 
+# --- проверка: ничего из интерьера не торчит сквозь обшивку
+
+
+def inside_hull(x, y, z, m):
+    if z < -48 or z > 105:
+        return False
+    a, yb, yt, nt, nb = PROF(z)
+    return yb + m < y < yt - m and abs(x) < halfwidth(z, y) - m
+
+
+def all_uuids(g):
+    out = []
+    for c in g["children"]:
+        out += [c] if isinstance(c, str) else all_uuids(c)
+    return out
+
+
+bad = check_inside(all_uuids(GROUPS["cockpit"]) + all_uuids(GROUPS["cabin_interior"]), inside_hull)
+for name, p in bad:
+    print("  ! торчит наружу:", name, p)
+print("проверка интерьера:", "OK" if not bad else f"{len(bad)} элементов снаружи")
 
 tex_png = png_bytes()
 with open(os.path.join(HERE, "mi8_texture.png"), "wb") as f:
     f.write(tex_png)
-
-model = {
-    "meta": {"format_version": "4.10", "model_format": "free", "box_uv": False},
-    "name": "mi8_helicopter",
-    "model_identifier": "mi8_helicopter",
-    "visible_box": [10, 6, 1],
-    "variable_placeholders": "",
-    "variable_placeholder_buttons": [],
-    "timeline_setups": [],
-    "unhandled_root_fields": {},
-    "resolution": {"width": TEX, "height": TEX},
-    "elements": elements,
-    "outliner": [root],
-    "textures": [{
-        "path": "", "name": "mi8_texture.png", "folder": "", "namespace": "", "id": "0",
-        "group": "", "width": TEX, "height": TEX, "uv_width": TEX, "uv_height": TEX,
-        "particle": False, "use_as_default": True, "layers_enabled": False, "sync_to_project": "",
-        "render_mode": "default", "render_sides": "auto", "pbr_channel": "color",
-        "frame_time": 1, "frame_order_type": "loop", "frame_order": "", "frame_interpolate": False,
-        "visible": True, "internal": True, "saved": False, "uuid": new_uuid(), "relative_path": "",
-        "source": "data:image/png;base64," + base64.b64encode(tex_png).decode(),
-    }],
-    "animations": anims,
-}
-with open(os.path.join(HERE, "mi8_helicopter.bbmodel"), "w", encoding="utf-8") as f:
-    json.dump(model, f, ensure_ascii=False, separators=(",", ":"))
+write_bbmodel(os.path.join(HERE, "mi8_helicopter.bbmodel"), "mi8_helicopter", root, anims, tex_png, "mi8_texture.png")
 print(f"elements: {len(elements)}, groups: {len(GROUPS)}, animations: {len(anims)}")
 
 
@@ -1276,78 +1107,18 @@ PARTS = {  # часть: (группа или None для «всего оста�
 ELS = {e["uuid"]: e for e in elements}
 
 
-def mat_mul(A, B):
-    return [[sum(A[i][k] * B[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
 
 
-def mat_vec(A, v):
-    return tuple(sum(A[i][k] * v[k] for k in range(3)) for i in range(3))
 
 
-def rot_zyx(r):
-    x, y, z = (math.radians(a) for a in r)
-    Rx = [[1, 0, 0], [0, math.cos(x), -math.sin(x)], [0, math.sin(x), math.cos(x)]]
-    Ry = [[math.cos(y), 0, math.sin(y)], [0, 1, 0], [-math.sin(y), 0, math.cos(y)]]
-    Rz = [[math.cos(z), -math.sin(z), 0], [math.sin(z), math.cos(z), 0], [0, 0, 1]]
-    return mat_mul(Rz, mat_mul(Ry, Rx))
 
 
-I3 = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
 
 
-def collect(node, Ra, ta, out, skip):
-    """Собирает элементы группы с учётом поворотов вложенных групп."""
-    if node.get("rotation"):
-        G = node["origin"]
-        Rg = rot_zyx(node["rotation"])
-        # A(p) = Ra*(G + Rg*(p-G)) + ta
-        tg = sub(tuple(G), mat_vec(Rg, tuple(G)))
-        ta = add(mat_vec(Ra, tg), ta)
-        Ra = mat_mul(Ra, Rg)
-    for c in node["children"]:
-        if isinstance(c, str):
-            out.append((ELS[c], Ra, ta))
-        elif c["name"] not in skip:
-            collect(c, Ra, ta, out, skip)
 
 
-def euler_xyz(R):
-    """R = Rx*Ry*Rz -> углы (x, y, z) в градусах."""
-    y = math.asin(max(-1, min(1, R[0][2])))
-    if abs(R[0][2]) < 0.9999999:
-        x = math.atan2(-R[1][2], R[2][2])
-        z = math.atan2(-R[0][1], R[0][0])
-    else:
-        x, z = math.atan2(R[2][1], R[1][1]), 0
-    return [round(math.degrees(v), 4) for v in (x, y, z)]
 
 
-def java_element(e, Ra, ta, pivot):
-    O = tuple(e["origin"])
-    Re = rot_zyx(e.get("rotation", [0, 0, 0]))
-    O2 = add(mat_vec(Ra, O), ta)
-    R2 = mat_mul(Ra, Re)
-    X = (R2[0][0], R2[1][0], R2[2][0])
-    Y = (R2[0][1], R2[1][1], R2[2][1])
-    Z = (R2[0][2], R2[1][2], R2[2][2])
-    ang = euler_zyx(X, Y, Z) if JAVA_ROTATION_ORDER == "ZYX" else euler_xyz(R2)
-    k = 1 / JAVA_SHRINK
-    o = [round((O2[i] - pivot[i]) * k + 8, 4) for i in range(3)]
-    frm = [round(o[i] + (e["from"][i] - O[i]) * k, 4) for i in range(3)]
-    to = [round(o[i] + (e["to"][i] - O[i]) * k, 4) for i in range(3)]
-    for v in frm + to:
-        assert -16 <= v <= 32, (e["name"], frm, to)
-    je = {"from": frm, "to": to, "faces": {}}
-    nz = [(i, a) for i, a in enumerate(ang) if abs(a) > 1e-3]
-    if nz:
-        if len(nz) == 1 and any(abs(nz[0][1] - s) < 1e-3 for s in (-45, -22.5, 22.5, 45)):
-            je["rotation"] = {"origin": o, "axis": "xyz"[nz[0][0]], "angle": round(nz[0][1], 3)}
-        else:
-            # Java 26.1+: свободный поворот по трём осям (тот же порядок, что в Blockbench)
-            je["rotation"] = {"origin": o, "x": ang[0], "y": ang[1], "z": ang[2]}
-    for f, fd in e["faces"].items():
-        je["faces"][f] = {"uv": [round(u * 16 / TEX, 4) for u in fd["uv"]], "texture": "#0"}
-    return je
 
 
 def export_java():

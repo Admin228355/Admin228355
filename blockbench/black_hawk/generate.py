@@ -23,25 +23,30 @@ TYPE_ID = "blackhawk"
 L.RNG.seed(2031)
 
 # ---------------------------------------------------------------------------
-# Текстура: палитра «чёрный оружейный металл»
+# Текстура 1024x1024: палитра «чёрный оружейный металл»
+# Раскладка атласа задаётся в координатах 256, рисуется в полном разрешении (S = 4).
 # ---------------------------------------------------------------------------
-BASE = (47, 49, 53)
-BASE_D = (36, 37, 41)
-BASE_L = (64, 66, 71)
-LINE = (20, 21, 23)
-GLASS = (24, 34, 42)
-STEEL = (92, 95, 100)
+L.set_tex(1024)
+S = L.S
+BASE = (50, 52, 56)
+BASE_D = (38, 40, 44)
+BASE_L = (78, 81, 86)
+LINE = (18, 19, 21)
+HILITE = (74, 77, 82)
+STEEL = (104, 107, 112)
+STENCIL = (150, 152, 150)
 
 
-def gun(s, t, seed=0):
-    """Цвет обшивки: панели разного тона, лёгкий шум, потёртости."""
-    cell = L._h(int(s // 6), int(t // 6), seed)
-    c = L.mix(BASE_D, BASE, 0.4 + cell * 0.6)
-    c = L.noisy(c, 3)
-    w = L.fbm(s * 0.25, t * 0.25, seed + 3)
-    if w > 0.68:
-        c = L.mix(c, BASE_L, (w - 0.68) * 3)
-    return c
+def gun(s, t, seed=0, panel_id=0):
+    """Цвет обшивки в точке (s, t) мировых единиц: тон панели, мелкий шум, пятна, потёртости."""
+    tone = (L._h(panel_id, 7, seed) - 0.5) * 10
+    c = (BASE[0] + tone, BASE[1] + tone, BASE[2] + tone * 1.1)
+    n = L.fbm(s * 0.08, t * 0.08, seed, 3)
+    c = L.shade(c, 0.9 + n * 0.2)
+    g = L.fbm(s * 0.9, t * 0.9, seed + 11, 2)
+    if g > 0.7:
+        c = L.mix(c, BASE_L, (g - 0.7) * 2.2)     # светлые потёртости
+    return L.noisy(c, 2.2)
 
 
 def tile(name, u, v, w, h, whole, fn):
@@ -49,23 +54,29 @@ def tile(name, u, v, w, h, whole, fn):
 
 
 def glass_px(x, y):
-    c = L.noisy(GLASS, 3)
-    c = L.mix(c, (90, 110, 122), max(0, 0.35 - abs((x + y) - 30) / 40))
-    return c + (150,)
+    W = 32 * S
+    band = max(0.0, 1 - abs((x + y) - W * 0.9) / (W * 0.35))
+    c = L.mix((64, 86, 100), (170, 190, 200), band * 0.55)
+    a = 58 + band * 50
+    if L.fbm(x * 0.08, y * 0.08, 44, 3) > 0.8:
+        c, a = L.mix(c, (110, 104, 90), 0.3), 95      # пыль
+    return c + (int(a),)
 
 
 tile("glass", 0, 128, 32, 32, False, glass_px)
+tile("clear", 240, 240, 16, 16, True, lambda x, y: (0, 0, 0, 0))
 
 
 def window_px(x, y):
-    if x in (0, 15) or y in (0, 11):
-        return L.noisy((18, 19, 21), 2)
-    if x in (1, 14) or y in (1, 10):
-        return L.noisy((60, 62, 66), 3)
-    c = L.noisy((34, 46, 56), 3)
-    if 3 <= x - y + 4 <= 5:
-        c = L.mix(c, (150, 170, 180), 0.4)
-    return c + (230,)
+    W, H = 16 * S, 12 * S
+    if x < 3 or y < 3 or x >= W - 3 or y >= H - 3:
+        return L.noisy((22, 23, 25), 2)
+    if x < 5 or y < 5 or x >= W - 5 or y >= H - 5:
+        return L.noisy((64, 66, 70), 3)
+    c = L.noisy((40, 56, 68), 3)
+    if abs((x - y) - 8) < 5:
+        c = L.mix(c, (160, 180, 190), 0.45)
+    return c + (225,)
 
 
 tile("window", 32, 128, 16, 12, True, window_px)
@@ -75,10 +86,13 @@ DIG = {"0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
 
 
 def number_px(x, y):
+    sc = 7
     for i, d in enumerate("01"):
-        gx, gy = (x - 4 - i * 13) // 2, (y - 1) // 2
+        gx, gy = (x - 16 - i * 52) // sc, (y - 6) // sc
         if 0 <= gx < 5 and 0 <= gy < 7 and DIG[d][gy][gx] == "1":
-            return L.noisy((150, 152, 150), 5)
+            if L.fbm(x * 0.15, y * 0.15, 8, 3) > 0.72:
+                return (0, 0, 0, 0)
+            return L.noisy(STENCIL, 5)
     return (0, 0, 0, 0)
 
 
@@ -86,8 +100,7 @@ tile("number", 48, 128, 32, 16, True, number_px)
 
 
 def emblem_px(x, y):
-    # стилизованная эмблема: две «клешни» и центральный клин
-    px, py = x - 15.5, y - 15.5
+    px, py = (x - 63.5) / 4, (y - 63.5) / 4       # те же пропорции, что в макете 32x32
     inside = False
     if abs(px) < 3 and -12 < py < 10 and abs(px) < (py + 12) * 0.25 + 0.6:
         inside = True
@@ -97,69 +110,177 @@ def emblem_px(x, y):
             inside = True
     if abs(py + 12.5) < 1.2 and abs(px) < 12:
         inside = True
-    if inside:
-        return L.noisy((128, 130, 132), 4)
-    return (0, 0, 0, 0)
+    return L.noisy((140, 142, 144), 4) if inside else (0, 0, 0, 0)
 
 
 tile("emblem", 80, 128, 32, 32, True, emblem_px)
-tile("tire", 112, 128, 32, 32, False, lambda x, y: L.noisy((24, 24, 24), 3) if y % 4 else L.noisy((16, 16, 16), 2))
-tile("tireside", 144, 128, 32, 32, False, lambda x, y: L.noisy((30, 30, 31), 3))
-tile("metal", 176, 128, 32, 32, False, lambda x, y: L.shade(L.noisy((46, 48, 51), 4), 0.9 + L.fbm(x * .2, y * .2, 5) * .2))
-tile("hull", 208, 128, 32, 32, False, lambda x, y: L.shade(gun(x * 1.5, y * 1.5, 2), 0.8 if x % 16 == 0 or y % 16 == 0 else 1))
-tile("steel", 240, 128, 16, 32, False, lambda x, y: L.noisy(STEEL, 8))
-tile("floor", 0, 160, 32, 32, False, lambda x, y: L.noisy((18, 18, 19), 2) if (x % 4 == 0 or y % 8 == 0)
-     else L.noisy((44, 45, 47), 3))
-tile("wall", 32, 160, 32, 32, False, lambda x, y: L.shade(L.noisy((50, 52, 55), 3), 0.7 if x % 8 == 0 else (1.12 if x % 8 == 1 else 1)))
-tile("seat", 64, 160, 32, 32, False, lambda x, y: L.shade(L.noisy((28, 28, 30), 3), 0.7 if y % 6 == 0 else 1))
-tile("seatframe", 96, 160, 32, 32, False, lambda x, y: L.noisy((70, 72, 76), 5))
+
+
+def tire_px(x, y):
+    blk = ((x // 10) + (y // 14)) % 2
+    edge = (y % 14) < 2 or (x % 10) < 2
+    c = (20, 20, 20) if edge else ((32, 32, 33) if blk else (27, 27, 28))
+    return L.noisy(c, 2)
+
+
+tile("tire", 112, 128, 32, 32, False, tire_px)
+tile("tireside", 144, 128, 32, 32, False, lambda x, y: L.noisy((34, 34, 35) if (y // 6) % 4 else (40, 40, 41), 2))
+tile("metal", 176, 128, 32, 32, False, lambda x, y: L.shade(L.noisy((50, 52, 56), 2),
+                                                          0.9 + L.fbm(x * 0.02, y * 0.4, 5, 2) * 0.2))
+
+
+def hull_tile_px(x, y):
+    if x % 64 in (0, 1) or y % 64 in (0, 1):
+        return LINE
+    if x % 64 == 2 or y % 64 == 2:
+        return HILITE
+    if (x % 64 == 5 or y % 64 == 5) and ((x + y) % 8 == 0):
+        return (96, 98, 102)
+    return gun(x * 0.25, y * 0.25, 2, (x // 64) * 7 + y // 64)
+
+
+tile("hull", 208, 128, 32, 32, False, hull_tile_px)
+tile("steel", 240, 128, 16, 32, False, lambda x, y: L.shade(L.noisy(STEEL, 5), 0.9 + L.fbm(x * 0.03, y * 0.5, 6, 2) * 0.2))
+
+
+def floor_px(x, y):
+    # рифлёный настил с поперечными швами и направляющими
+    if y % 64 < 2:
+        return (14, 14, 15)
+    if x % 128 in range(60, 68):
+        return L.noisy((78, 80, 84), 4) if x % 128 in (61, 66) else L.noisy((30, 31, 33), 2)
+    d = ((x + (y // 8) * 4) % 8, y % 8)
+    if d[0] in (2, 3, 4) and d[1] in (3, 4):
+        return L.noisy((70, 72, 76), 3)          # рифление
+    return L.noisy((40, 41, 44), 2)
+
+
+tile("floor", 0, 160, 32, 32, False, floor_px)
+
+
+def wall_px(x, y):
+    if x % 32 < 3:
+        return L.noisy((34, 35, 38), 2) if x % 32 else (22, 22, 24)   # рёбра шпангоутов
+    if x % 32 == 3:
+        return (78, 80, 84)
+    if (y % 24 in (6, 18)) and (x % 32 in (8, 24)):
+        return (96, 98, 102)                     # болты
+    q = ((x // 8) + (y // 8)) % 2                # стёганая шумоизоляция
+    c = (58, 60, 64) if q else (52, 54, 58)
+    if x % 8 == 0 or y % 8 == 0:
+        c = (44, 45, 48)
+    return L.noisy(c, 2)
+
+
+tile("wall", 32, 160, 32, 32, False, wall_px)
+
+
+def seat_px(x, y):
+    c = (34, 34, 36) if (x + y) % 3 else (28, 28, 30)
+    if y % 24 in (0, 1):
+        c = (58, 58, 60)                         # строчка
+    if 50 <= x % 128 <= 58:
+        c = (22, 22, 24) if x % 128 not in (50, 58) else (70, 70, 72)   # ремень
+    return L.noisy(c, 2)
+
+
+tile("seat", 64, 160, 32, 32, False, seat_px)
+tile("seatframe", 96, 160, 32, 32, False, lambda x, y: L.noisy((82, 84, 88), 5))
 
 
 def panel_px(x, y):
-    # три многофункциональных дисплея
-    for sx in (1, 11, 22):
-        if sx <= x < sx + 9 and 2 <= y < 13:
-            if x in (sx, sx + 8) or y in (2, 12):
-                return (60, 62, 66)
-            cx, cy = sx + 4, 7.5
-            d = math.hypot(x - cx, y - cy)
-            if abs(d - 3.5) < 0.6 or (abs(x - cx) < 0.5) or abs(y - cy) < 0.5:
-                return (90, 220, 240)
-            return L.noisy((14, 40, 58), 5)
-    if y in (16, 17) and x % 3 == 1:
-        return (200, 60, 50)
-    if 20 <= y < 30 and x % 4 in (1, 2) and y % 3 != 0:
-        return L.noisy((70, 72, 76), 6)
-    return L.noisy((20, 21, 23), 2)
+    # три МФД-экрана: карта, радар, авиагоризонт; кнопки по краям
+    for i, sx in enumerate((4, 46, 88)):
+        if sx <= x < sx + 36 and 8 <= y < 52:
+            lx, ly = x - sx, y - 8
+            if lx < 3 or ly < 3 or lx >= 33 or ly >= 41:
+                return (64, 66, 70)
+            cx, cy = 18, 22
+            if i == 0:          # карта
+                c = (18, 40, 30)
+                if L.fbm(lx * 0.15, ly * 0.15, 71, 2) > 0.55:
+                    c = (40, 90, 60)
+                if abs(lx - ly) < 1 or abs(lx + ly - 38) < 1:
+                    c = (220, 200, 90)
+                return c
+            if i == 1:          # радар
+                d = math.hypot(lx - cx, ly - cy)
+                if any(abs(d - r) < 0.7 for r in (5, 10, 15)) or abs(lx - cx) < 0.6 or abs(ly - cy) < 0.6:
+                    return (90, 220, 240)
+                if abs(math.atan2(ly - cy, lx - cx) - 0.8) < 0.15 and d < 15:
+                    return (60, 170, 200)
+                return (10, 30, 44)
+            # авиагоризонт
+            c = (40, 110, 170) if ly < cy + (lx - cx) * 0.15 else (120, 80, 40)
+            if abs(ly - cy) < 0.7 and 8 < lx < 28:
+                return (240, 240, 240)
+            return c
+    if y >= 56:
+        if (x % 10 in (3, 4, 5)) and (y % 10 in (3, 4, 5)):
+            return (80, 82, 86) if (x // 10 + y // 10) % 5 else (200, 60, 50)
+        if y in (100, 101) and x % 6 < 3:
+            return (220, 180, 60)
+    if y < 56 and (x < 4 or x >= 124) and y % 8 in (2, 3, 4):
+        return (90, 92, 96)                      # кнопки у экранов
+    return L.noisy((24, 25, 27), 2)
 
 
 tile("panel", 128, 160, 32, 32, True, panel_px)
-tile("crate", 160, 160, 32, 32, True, lambda x, y: (150, 130, 50) if (y in (5, 26) and 3 <= x <= 28) else
-     L.shade(L.noisy((44, 50, 42), 4), 0.6 if x in (0, 31) or y in (0, 31) or x in (15, 16) else 1))
-tile("soot", 192, 160, 32, 16, False, lambda x, y: L.noisy((20, 19, 18), 3))
-tile("light", 192, 176, 32, 16, True, lambda x, y: (190, 196, 200) if 1 <= x < 31 and 2 <= y < 14 else (60, 62, 66))
-tile("grille", 224, 160, 32, 32, True, lambda x, y: (10, 10, 11) if x % 3 == 0 or y % 3 == 0 else L.noisy((40, 42, 45), 3))
-tile("red", 0, 192, 16, 16, False, lambda x, y: L.noisy((190, 30, 30), 10))
-tile("green", 16, 192, 16, 16, False, lambda x, y: L.noisy((40, 190, 70), 10))
-tile("blue", 32, 192, 16, 16, True, lambda x, y: (140, 220, 255) if math.hypot(x - 7.5, y - 7.5) < 3 else
-     ((60, 140, 220) if math.hypot(x - 7.5, y - 7.5) < 6 else (26, 28, 30)))
+
+
+def crate_px(x, y):
+    W = 128
+    if x < 4 or y < 4 or x >= W - 4 or y >= W - 4:
+        return (26, 28, 26)
+    if 60 <= x <= 67:
+        return L.noisy((34, 38, 33), 2)          # ребро жёсткости
+    if y in range(18, 26) and (x in range(16, 30) or x in range(98, 112)):
+        return L.noisy((190, 160, 60), 6)        # защёлки
+    return L.noisy((52, 58, 50), 3)
+
+
+def crate_tile():
+    tile("crate", 160, 160, 32, 32, True, crate_px)
+    L.stencil(160 * S + 20, 160 * S + 80, "CARGO", (170, 170, 150), scale=3)
+
+
+crate_tile()
+tile("soot", 192, 160, 32, 16, False, lambda x, y: L.noisy((22, 21, 20), 3))
+tile("light", 192, 176, 32, 16, True, lambda x, y: L.mix((255, 250, 235), (170, 175, 180),
+                                                         min(1, abs(y - 32) / 30)) if 4 <= x < 124 and 6 <= y < 58 else (60, 62, 66))
+tile("grille", 224, 160, 32, 32, True, lambda x, y: (10, 10, 11) if x % 6 < 2 or y % 6 < 2 else L.noisy((46, 48, 52), 3))
+tile("red", 0, 192, 16, 16, False, lambda x, y: L.noisy((200, 30, 30), 10))
+tile("green", 16, 192, 16, 16, False, lambda x, y: L.noisy((40, 200, 80), 10))
+
+
+def lens_px(x, y):
+    d = math.hypot(x - 31.5, y - 31.5)
+    if d < 10:
+        return (170, 235, 255) if d > 4 or (x + y) % 3 else (230, 250, 255)
+    if d < 24:
+        return L.mix((50, 140, 230), (20, 50, 90), (d - 10) / 14)
+    return (26, 28, 30)
+
+
+tile("blue", 32, 192, 16, 16, True, lens_px)
 
 
 def rocket_px(x, y):
-    for cx in (6, 16, 26):
-        for cy in (6, 16, 26):
-            if math.hypot(x + .5 - cx, y + .5 - cy) < 3.2:
-                return (8, 8, 8) if math.hypot(x + .5 - cx, y + .5 - cy) < 2.3 else (70, 72, 76)
-    return L.noisy((38, 40, 43), 3)
+    for cx in (22, 64, 106):
+        for cy in (22, 64, 106):
+            d = math.hypot(x + .5 - cx, y + .5 - cy)
+            if d < 14:
+                return (6, 6, 6) if d < 10 else ((96, 98, 102) if d < 12 else (60, 62, 66))
+    return L.noisy((40, 42, 46), 3)
 
 
 tile("rocket", 48, 192, 32, 32, True, rocket_px)
-tile("bladestrip", 96, 192, 128, 8, True, lambda x, y: L.shade(L.noisy((36, 38, 41), 3), 0.75 if y in (0, 7) else 1)
-     if x < 120 else L.noisy((130, 132, 135), 5))
-tile("bladeedge", 96, 200, 128, 8, False, lambda x, y: L.noisy((34, 36, 38), 3))
-tile("tip", 96, 208, 16, 16, False, lambda x, y: L.noisy((128, 130, 132), 5))
-tile("interior_dark", 112, 208, 32, 16, False, lambda x, y: L.noisy((26, 27, 29), 3))
-tile("leather", 144, 208, 32, 16, False, lambda x, y: L.noisy((34, 32, 30), 3))
+tile("bladestrip", 96, 192, 128, 8, True, lambda x, y: (L.noisy((140, 142, 145), 4) if x > 480 else
+                                                       L.shade(L.noisy((40, 42, 45), 2), 0.7 if y < 3 or y > 28 else (1.15 if y < 7 else 1))))
+tile("bladeedge", 96, 200, 128, 8, False, lambda x, y: L.noisy((38, 40, 43), 2))
+tile("tip", 96, 208, 16, 16, False, lambda x, y: L.noisy((140, 142, 145), 4))
+tile("interior_dark", 112, 208, 32, 16, False, lambda x, y: L.noisy((28, 29, 31), 2))
+tile("leather", 144, 208, 32, 16, False, lambda x, y: L.noisy((36, 34, 32), 2))
 
 # ---------------------------------------------------------------------------
 # Профиль корпуса: гранёное сечение из 10 вершин
@@ -216,12 +337,14 @@ Z_RINGS = [-62, -61, -60, -58, -56, -53, -50, -47.5, -45, -42.5, -40, -37, -34, 
            -8, -4, 0, 4, 8, 12, 16, 18, 21, 24, 27, 30, 33, 36, 39, 42, 46, 50, 56, 62, 68, 75, 82, 89, 95,
            100, 103, 106]
 Z_SPLIT = 42
-REG_A = (0, 0, 128, 128, -62, Z_SPLIT)
-REG_B = (128, 0, 64, 128, Z_SPLIT, 106)
+REG_A = (0, 0, 128 * S, 128 * S, -62, Z_SPLIT)
+REG_B = (128 * S, 0, 64 * S, 128 * S, Z_SPLIT, 106)
 HULL_T = 0.6
+GLASS_T = 0.15
 UW = [0, 0.09, 0.21, 0.31, 0.41, 0.5, 0.59, 0.69, 0.79, 0.91, 1.0]  # доли развёртки по граням
 
 fus, side_l, side_r, ramp = [], [], [], []
+DOOR_CELLS = {"side_l": set(), "side_r": set(), "ramp": set()}
 
 
 def hull_uv(i, k):
@@ -244,8 +367,10 @@ def is_glass(k, c):
 def hull_dest(i, k, c):
     x, y, z = c
     if -24 < z < -12 and k in (1, 2, 3, 6, 7, 8):
+        DOOR_CELLS["side_r" if x > 0 else "side_l"].add((i, k))
         return side_r if x > 0 else side_l
     if 21 < z < Z_SPLIT and y < 17.8:
+        DOOR_CELLS["ramp"].add((i, k))
         return ramp
     return fus
 
@@ -256,7 +381,7 @@ def hull_outer(i, k, c):
 
 def hull_inner(i, k, c):
     if is_glass(k, c):
-        return "glass"
+        return "clear"      # изнутри стекло полностью прозрачное — пилоту всё видно
     if k in (4, 5) and c[2] < 42:
         return "floor"
     return "wall" if c[2] < 40 else "interior_dark"
@@ -264,49 +389,155 @@ def hull_inner(i, k, c):
 
 rings = [ring(z) for z in Z_RINGS]
 centers = [(0, (prof(z)[3] + prof(z)[6]) / 2, z) for z in Z_RINGS]
-loft("hull", rings, centers, HULL_T, hull_outer, hull_dest, inner=hull_inner)
+loft("hull", rings, centers, lambda i, k, c: GLASS_T if is_glass(k, c) else HULL_T, hull_outer, hull_dest,
+     inner=hull_inner, edge=lambda i, k, c: "clear" if is_glass(k, c) else "hull")
 fus.extend(disc("nose_cap", (0, 12.2, -62.1), (0, 0, 1), 1.1, 0.3, "hull"))
 fus.extend(disc("tail_cap", (0, 23.4, 106.1), (0, 0, 1), 1.8, 0.3, "hull"))
 
-# --- роспись развёрток
+# --- роспись развёрток (всё в мировых координатах, линии — в пикселях)
 PANEL_Z = [-50, -34, -28, -24, -12, 0, 12, 21, 30, 42, 56, 75, 95]
-STENCILS = [(L.RNG.uniform(-26, 40), L.RNG.uniform(9, 16), L.RNG.choice((-1, 1))) for _ in range(10)]
 
 
-def hull_px(x, y, z, u_frac, seed):
-    c = gun(z * 1.2 + (0 if x < 0 else 400), y * 1.2, seed)
-    for pz in PANEL_Z:
-        if abs(z - pz) < 0.34:
-            c = LINE
-    for sz, sy, sd in STENCILS:
-        if (x < 0) == (sd < 0) and 0 < z - sz < 3 and 0 < y - sy < 0.7:
-            c = (110, 112, 112)
-    if y < 7:
-        c = L.mix(c, (34, 33, 31), 0.4)
-    if abs(x) > 4 and y > 24 and 18 < z < 44:  # копоть от выхлопа
-        c = L.mix(c, (18, 17, 16), min(0.7, math.exp(-(z - 18) / 16) * 0.8))
-    return c
+def region_of(z):
+    return REG_A if z <= Z_SPLIT else REG_B
+
+
+def to_px(k, t, z):
+    u0, v0, w, h, za, zb = region_of(z)
+    return (int(u0 + w * (UW[k] + t * (UW[k + 1] - UW[k]))), int(v0 + h * (z - za) / (zb - za)))
 
 
 def paint(reg, seed):
     u0, v0, w, h, za, zb = reg
+    dz = (zb - za) / h
     for py in range(h):
         z = za + (zb - za) * (py + 0.5) / h
         r = ring(z)
+        zone = sum(1 for pz in PANEL_Z if pz <= z)
+        near = min(PANEL_Z, key=lambda pz: abs(z - pz))
+        dzl = z - near
         for px in range(w):
             f = (px + 0.5) / w
             k = max(j for j in range(NSEG) if UW[j] <= f)
-            t = (f - UW[k]) / (UW[k + 1] - UW[k])
+            fw = UW[k + 1] - UW[k]
+            t = (f - UW[k]) / fw
+            dt = 1 / (w * fw)
             p0, p1 = r[k], r[(k + 1) % NSEG]
             x, y = p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t
-            c = hull_px(x, y, z, f, seed)
-            if t < 0.5 / (w * (UW[k + 1] - UW[k])) * 1.0:
-                c = L.shade(c, 0.7)     # рёбра граней
+            c = gun(z * 1.1, k * 40 + t * 12, seed, zone * 16 + k)
+            c = L.shade(c, 0.9 + 0.14 * max(0, min(1, (y - 5) / 25)))           # сверху светлее
+            if y < 8:
+                c = L.mix(c, (36, 34, 31), (8 - y) * 0.09)                         # грязь снизу
+            if abs(x) > 4 and y > 24 and 18 < z < 46:                              # копоть от выхлопа
+                c = L.mix(c, (20, 19, 18), min(0.7, math.exp(-(z - 18) / 14) * 0.8))
+            # швы панелей с фаской и заклёпками
+            if abs(dzl) < dz:
+                c = LINE
+            elif 0 < dzl < dz * 2.2:
+                c = L.shade(c, 1.22)
+            elif dz * 3 < abs(dzl) < dz * 4 and int(t / dt) % 7 == 0:
+                c = (104, 106, 110)
+            if t < dt * 1.2:
+                c = L.shade(c, 0.55)
+            elif t < dt * 2.4:
+                c = L.shade(c, 1.18)
+            elif dt * 4 < t < dt * 5 and int(z / dz) % 7 == 0:
+                c = (100, 102, 106)
+            if k in (2, 7) and abs(t - 0.5) < dt and -28 < z < 21:
+                c = LINE                                                          # продольный шов борта
             L.put(u0 + px, v0 + py, c)
 
 
 paint(REG_A, 11)
 paint(REG_B, 12)
+
+
+def rect_px(x0, y0, x1, y1, col, width=1):
+    for i in range(width):
+        for x in range(min(x0, x1), max(x0, x1) + 1):
+            L.put(x, y0 + i, col)
+            L.put(x, y1 - i, col)
+        for y in range(min(y0, y1), max(y0, y1) + 1):
+            L.put(x0 + i, y, col)
+            L.put(x1 - i, y, col)
+
+
+def hatch(k, z0, z1, t0, t1):
+    """Лючок на грани k: рамка с фаской и четыре винта."""
+    ax, ay = to_px(k, t0, z0)
+    bx, by = to_px(k, t1, z1)
+    x0, x1, y0, y1 = min(ax, bx), max(ax, bx), min(ay, by), max(ay, by)
+    rect_px(x0, y0, x1, y1, LINE)
+    rect_px(x0 + 1, y0 + 1, x1 - 1, y1 - 1, HILITE)
+    for px, py in ((x0 + 3, y0 + 3), (x1 - 3, y0 + 3), (x0 + 3, y1 - 3), (x1 - 3, y1 - 3)):
+        L.rivet(px, py, (120, 122, 126), (20, 20, 22))
+
+
+def text_on(k, z, t, text, scale=2, col=STENCIL):
+    """Трафаретная надпись на грани k, читается снаружи слева направо."""
+    bx, by = to_px(k, t, z)
+    right = k in (0, 1, 2, 3, 4)
+    dv = -1 if right else 1      # вдоль z
+    du = 1 if right else -1      # вниз по грани
+    cx = 0
+    for ch in text.upper():
+        g = L.FONT3.get(ch, L.FONT3[" "])
+        for gy in range(5):
+            for gx in range(3):
+                if g[gy * 3 + gx] == "1":
+                    for sy in range(scale):
+                        for sx in range(scale):
+                            L.put(bx + du * (gy * scale + sy), by + dv * (cx + gx * scale + sx), col)
+        cx += 4 * scale
+
+
+for side_k in ((1, 2, 3), (8, 7, 6)):
+    up, mid, low = side_k
+    for z0 in (-10, 2, 26):
+        hatch(mid, z0, z0 + 3.5, 0.15, 0.45)
+    hatch(low, -6, -1, 0.2, 0.7)
+    hatch(up, 4, 9, 0.3, 0.8)
+    hatch(mid, 60, 64, 0.2, 0.8)
+    text_on(mid, -6 if mid == 7 else 5, 0.62, "FUEL", 2)
+    text_on(up, -22.9 if mid == 7 else -13.1, 0.5, "EXIT", 3, (200, 176, 70))
+    text_on(mid, 30 if mid == 7 else 36, 0.3, "BH-01", 2)
+    text_on(mid, 66 if mid == 7 else 72, 0.4, "DANGER", 2, (180, 60, 50))
+    text_on(up, 48 if mid == 7 else 56, 0.35, "KEEP CLEAR", 2, (180, 60, 50))
+for k in (0, 9):
+    text_on(k, -24 if k == 9 else -18, 0.5, "NO STEP", 2)
+
+
+def outline_cells(cells, col=(10, 10, 11), hi=(90, 93, 98), dashed=True):
+    """Щель вокруг двери: рисуем только края, где соседняя клетка — не дверь."""
+    for (i, k) in cells:
+        u0, v0, u1, v1 = [int(round(v)) for v in hull_uv(i, k)]
+        u1 -= 1
+        v1 -= 1
+        edges = [((i - 1, k), [(u, v0) for u in range(u0, u1 + 1)], (0, 1)),
+                 ((i + 1, k), [(u, v1) for u in range(u0, u1 + 1)], (0, -1)),
+                 ((i, k - 1), [(u0, v) for v in range(v0, v1 + 1)], (1, 0)),
+                 ((i, k + 1), [(u1, v) for v in range(v0, v1 + 1)], (-1, 0))]
+        for nb, pts, (ix, iy) in edges:
+            if nb in cells:
+                continue
+            for (u, v) in pts:
+                L.put(u, v, col)
+                L.put(u + ix, v + iy, col)
+                L.put(u + 2 * ix, v + 2 * iy, col)
+                L.put(u + 3 * ix, v + 3 * iy, hi)
+                if dashed and ((u + v) // 5) % 2 == 0:
+                    L.put(u + 8 * ix, v + 8 * iy, (170, 172, 168))
+                    L.put(u + 9 * ix, v + 9 * iy, (170, 172, 168))
+
+
+for cells in DOOR_CELLS.values():
+    outline_cells(cells)
+# жёлто-чёрная разметка у ручек дверей и шарнира рампы
+for k, z in ((2, -14.6), (7, -14.6)):
+    for j in range(24):
+        bx, by = to_px(k, 0.55, z)
+        for q in range(6):
+            L.put(bx + j, by + q, (200, 170, 40) if ((j + q) // 3) % 2 == 0 else (18, 18, 18))
 
 # ---------------------------------------------------------------------------
 # Декали и рамы остекления
@@ -351,11 +582,11 @@ frames = []
 for idx in (1, 2, 8, 9):
     pts = [ring(z)[idx] for z in (-58, -53, -50, -47.5, -45, -42.5, -40, -37, -34)]
     for a, b in zip(pts, pts[1:]):
-        frames += rod("canopy_frame", a, b, 0.32, "metal")
+        frames += rod("canopy_frame", a, b, 0.2, "metal")
 for zf in (-45, -34):
     r = ring(zf)
     for a, b in zip([r[7], r[8], r[9], r[0], r[1], r[2]], [r[8], r[9], r[0], r[1], r[2], r[3]]):
-        frames += rod("canopy_arch", a, b, 0.35, "metal")
+        frames += rod("canopy_arch", a, b, 0.22, "metal")
 
 # ---------------------------------------------------------------------------
 # Пол, переборка, интерьер
@@ -370,7 +601,7 @@ for a, b in zip(zs_floor, zs_floor[1:]):
 
 def cap(name, z, t, dest, mat="wall", hole=None, rows=14):
     w, tw, bw, yb, ybl, ybh, yt = prof(z)
-    ys = [yb + (yt - yb) * i / rows for i in range(rows + 1)]
+    ys = [yb + 0.4 + (yt - yb - 0.8) * i / rows for i in range(rows + 1)]
     for y0, y1 in zip(ys, ys[1:]):
         hw = min(halfwidth(z, y0 + 0.01), halfwidth(z, y1 - 0.01)) - 0.3
         if hw < 0.3:
@@ -387,11 +618,11 @@ cap("bulkhead", -29.5, 0.8, interior, "wall", hole=(-3.5, 3.5, 7, 25))
 
 # кабина пилотов
 ck = []
-ck.append(cube("instrument_panel", [-7.4, 13.2, -46.9], [7.4, 18.6, -46.0], "metal", {"south": "panel"},
-               origin=[0, 13.2, -46.4], rot=[-20, 0, 0]))
-ck.append(cube("glareshield", [-7.0, 18.4, -47.6], [7.0, 19.2, -45.4], "leather", origin=[0, 18.8, -46.5], rot=[-8, 0, 0]))
+ck.append(cube("instrument_panel", [-7.0, 11.2, -45.9], [7.0, 15.6, -45.0], "metal", {"south": "panel"},
+               origin=[0, 11.2, -45.4], rot=[-20, 0, 0]))
+ck.append(cube("glareshield", [-6.6, 15.4, -46.6], [6.6, 16.1, -44.6], "leather", origin=[0, 15.7, -45.6], rot=[-8, 0, 0]))
 ck.append(cube("center_console", [-2, 7, -46], [2, 12.5, -38], "metal", {"up": "panel"}))
-ck.append(cube("overhead_panel", [-3.5, 27.6, -40], [3.5, 28.6, -32], "metal", {"down": "panel"}))
+ck.append(cube("overhead_panel", [-3.0, 25.6, -38], [3.0, 26.4, -31], "metal", {"down": "panel"}))
 for s in (-1, 1):
     x = 5.2 * s
     n = "L" if s < 0 else "R"
@@ -413,11 +644,11 @@ for s in (-1, 1):
         xs = xw - s * 2.2
         cab.append(cube(f"seat_{n}{i}", [min(xs - s * 2.2, xs + s * 2.2), 11, z - 2.2],
                         [max(xs - s * 2.2, xs + s * 2.2), 12.2, z + 2.2], "seat"))
-        xb = s * 9.8
+        xb = s * 9.5
         cab.append(cube(f"seatback_{n}{i}", [min(xb, xb - s * 1.2), 12, z - 2.2], [max(xb, xb - s * 1.2), 20.5, z + 2.2], "seat"))
-        cab.append(cube(f"seathead_{n}{i}", [min(xb - s * 0.4, xb - s * 1.8), 20.5, z - 1.4], [max(xb - s * 0.4, xb - s * 1.8), 23, z + 1.4], "seat"))
+        cab.append(cube(f"seathead_{n}{i}", [min(s * 7.7, s * 8.9), 20.5, z - 1.4], [max(s * 7.7, s * 8.9), 22.8, z + 1.4], "seat"))
         cab += rod(f"seatleg_{n}{i}", (xs - s * 1.6, 7, z), (xs - s * 1.6, 11, z), 0.25, "seatframe")
-    cab += rod(f"rail_{n}", (s * 6.5, 29.3, -28), (s * 6.5, 29.3, 20), 0.25, "steel")
+    cab += rod(f"rail_{n}", (s * 5.0, 28.6, -28), (s * 5.0, 28.6, 20), 0.25, "steel")
     cab += rod(f"floorrail_{n}", (s * 4, 7.1, -28), (s * 4, 7.1, 21), 0.28, "steel")
 for z in (-24, -14, -4, 6, 16):
     cab.append(cube("ceiling_light", [-3.5, 29.4, z - 1.5], [3.5, 29.9, z + 1.5], "metal", {"down": "light"}))
@@ -432,7 +663,7 @@ cab.append(cube("med_kit", [-9.6, 18, -28.5], [-8.9, 21, -26.5], "red"))
 # Капот двигателей, пилон, выхлоп
 # ---------------------------------------------------------------------------
 eng = []
-ENG_ST = [(-37, 5.0, 31.5), (-33, 8.6, 36.8), (-26, 8.8, 37.2), (8, 8.8, 37.2), (16, 7.2, 35.8), (24, 4.6, 33.2), (30, 2.0, 31.0)]
+ENG_ST = [(-38.5, 1.2, 30.0), (-37, 5.0, 31.5), (-33, 8.6, 36.8), (-26, 8.8, 37.2), (8, 8.8, 37.2), (16, 7.2, 35.8), (24, 4.6, 33.2), (30, 2.0, 31.0)]
 _ez = [s[0] for s in ENG_ST]
 _ea, _et = pchip(_ez, [s[1] for s in ENG_ST]), pchip(_ez, [s[2] for s in ENG_ST])
 
@@ -443,8 +674,8 @@ def eng_ring(z):
     return [(-a, b, z), (-a, b + (t - b) * 0.55, z), (-a * 0.68, t, z), (a * 0.68, t, z), (a, b + (t - b) * 0.55, z), (a, b, z)]
 
 
-ENG_Z = [-37, -35, -33, -30, -26, -20, -14, -8, -2, 4, 8, 12, 16, 20, 24, 27, 30]
-REG_E = (192, 0, 64, 64, -37, 30)
+ENG_Z = [-38.5, -37, -35, -33, -30, -26, -20, -14, -8, -2, 4, 8, 12, 16, 20, 24, 27, 30]
+REG_E = (192 * S, 0, 64 * S, 64 * S, -38.5, 30)
 
 
 def eng_uv(i, k):
@@ -452,21 +683,31 @@ def eng_uv(i, k):
     return [u0 + w * k / 5, v0 + h * (ENG_Z[i] - za) / (zb - za), u0 + w * (k + 1) / 5, v0 + h * (ENG_Z[i + 1] - za) / (zb - za)]
 
 
-for py in range(64):
-    z = -37 + 67 * (py + 0.5) / 64
-    for px in range(64):
-        k = px * 5 // 64
-        c = gun(z * 1.3 + 900, px * 0.8, 21)
-        if abs(z - (-14)) < 0.5 or abs(z - 8) < 0.5 or px % 13 == 0:
-            c = LINE
-        if k in (0, 4) and -31 < z < -22 and 10 < (px % 13) < 12:
-            c = (12, 12, 13)
-        if z > 10 and k in (0, 1, 3, 4):
-            c = L.mix(c, (18, 17, 16), min(0.6, (z - 10) / 30))
-        L.put(192 + px, py, c)
+def paint_engine():
+    u0, v0, w, h, za, zb = REG_E
+    dz = (zb - za) / h
+    for py in range(h):
+        z = za + (zb - za) * (py + 0.5) / h
+        for px in range(w):
+            k = px * 5 // w
+            t = (px * 5 / w) - k
+            c = gun(z * 1.2 + 900, k * 40 + t * 10, 21, k * 5 + (0 if z < -14 else 1 if z < 8 else 2))
+            if min(abs(z + 14), abs(z - 8)) < dz or t < 5 / w:
+                c = LINE
+            elif min(abs(z + 14), abs(z - 8)) < dz * 2.2 or t < 10 / w:
+                c = L.shade(c, 1.2)
+            if k in (0, 4) and -31 < z < -21 and 0.25 < t < 0.8 and int(z / dz) % 6 < 3:
+                c = (12, 12, 13)                              # жалюзи
+            if k == 2 and -30 < z < 4 and (abs(t - 0.2) < 1.5 / w or abs(t - 0.8) < 1.5 / w):
+                c = (190, 170, 70) if int(z / dz) % 12 < 6 else (30, 30, 30)   # граница «не наступать»
+            if z > 10 and k in (0, 1, 3, 4):
+                c = L.mix(c, (20, 19, 18), min(0.65, (z - 10) / 26))
+            L.put(u0 + px, v0 + py, c)
+
+
+paint_engine()
 loft("engine", [eng_ring(z) for z in ENG_Z], [(0, 29.4, z) for z in ENG_Z], 0.5, lambda i, k, c: eng_uv(i, k),
      lambda i, k, c: eng, closed=False, inner="interior_dark")
-eng.append(cube("engine_front", [-5.2, 29.4, -37.3], [5.2, 31.4, -36.8], "hull"))
 for s in (-1, 1):
     n = "L" if s < 0 else "R"
     eng.append(cube(f"engine_intake_{n}", [min(s * 8.85, s * 9.4), 31, -31], [max(s * 8.85, s * 9.4), 34.4, -23],
@@ -534,7 +775,6 @@ side += disc("sensor_ball_b", (0, 6.2, -55.5), (0, 0, 1), 2.6, 3.6, "metal")
 side += disc("sensor_lens", (0, 6.2, -57.4), (0, 0, 1), 1.3, 0.4, "metal", "blue")
 for s in (-1, 1):
     side += disc(f"nose_light_{s}", (s * 2.6, 10.4, -60.1), (0, 0.3, 1), 0.9, 0.4, "metal", "blue")
-side += rod("pitot", (0, 13, -61.5), (0, 13.2, -67), 0.22, "steel")
 side += rod("antenna_top", (0, 30, -26), (0, 33.5, -24), 0.18, "metal")
 side += rod("antenna_belly", (0, 5, 10), (0, 2.3, 12), 0.18, "metal")
 
@@ -632,6 +872,17 @@ for s, lst in ((-1, side_l), (1, side_r)):
     n = "L" if s < 0 else "R"
     lst.append(decal(f"door_window_{n}", s, -18, 14.2, 3.6, 2.7, "window", offset=0.08))
     lst.append(cube(f"door_handle_{n}", [min(s * 12.25, s * 12.9), 12.5, -14.5], [max(s * 12.25, s * 12.9), 13.2, -13.2], "steel"))
+# поручни и подножки у дверей — сразу видно, где вход
+for s_ in (-1, 1):
+    n = "L" if s_ < 0 else "R"
+    for zr in (-25.3, -10.7):
+        fus.extend(rod(f"grab_rail_{n}", (s_ * 12.75, 10.2, zr), (s_ * 12.75, 15.8, zr), 0.22, "steel"))
+        for yr in (10.4, 15.6):
+            fus.extend(rod(f"grab_rail_mount_{n}", (s_ * 12.2, yr, zr), (s_ * 12.8, yr, zr), 0.18, "steel"))
+    fus.append(cube(f"door_step_{n}", [min(s_ * 10.6, s_ * 12.6), 5.2, -22.5], [max(s_ * 10.6, s_ * 12.6), 5.7, -13.5],
+                    "floor", {"up": "floor", "down": "metal"}))
+    fus.append(cube(f"door_rail_top_{n}", [min(s_ * 11.0, s_ * 11.9), 26.3, -24.5], [max(s_ * 11.0, s_ * 11.9), 26.9, -2],
+                    "metal", origin=[s_ * 11.45, 26.6, -13], rot=[0, 0, -s_ * 22]))
 door_l = group("side_door_L", (-12.2, 7, -24), side_l)
 door_r = group("side_door_R", (12.2, 7, -24), side_r)
 rampg = group("rear_ramp", (0, 6.0, 21), ramp + [cube("ramp_floor", [-8, 6.3, 21.2], [8, 6.9, 30], "interior_dark", {"up": "floor"},
@@ -680,7 +931,58 @@ anims = [
         "side_door_R": {"position": [(0, (-1.3, 0, 13)), (0.75, (-1.3, 0, 0), "catmullrom"), (1.0, Z3, "catmullrom")]}}),
     A("ramp_open", 2.0, "hold_on_last_frame", {"rear_ramp": {"rotation": [(0, Z3), (2.0, (-44, 0, 0), "catmullrom")]}}),
     A("ramp_close", 2.0, "hold_on_last_frame", {"rear_ramp": {"rotation": [(0, (-44, 0, 0)), (2.0, Z3, "catmullrom")]}}),
+    A("takeoff", 5.0, "hold_on_last_frame", {
+        "main_rotor": {"rotation": [(0, Z3), (1, (0, 540, 0)), (2, (0, 1260, 0)), (3, (0, 2040, 0)), (4, (0, 2880, 0)), (5, (0, 3780, 0))]},
+        "tail_rotor": {"rotation": [(0, Z3), (5, (5 * 3240, 0, 0))]},
+        "helicopter": {"position": [(0, Z3), (1.5, Z3, "catmullrom"), (2.2, (0, 2, 0), "catmullrom"),
+                                    (3.5, (0, 16, 0), "catmullrom"), (5, (0, FLY, 0), "catmullrom")],
+                       "rotation": [(0, Z3), (1.5, Z3, "catmullrom"), (2.2, (-3, 0, 0), "catmullrom"),
+                                    (3.5, (5, 0, 0), "catmullrom"), (5, Z3, "catmullrom")]},
+        "landing_gear": {"position": [(0, Z3), (1.5, Z3), (2.2, GD)]}}),
+    A("landing", 5.0, "hold_on_last_frame", {
+        "main_rotor": {"rotation": [(0, Z3), (1, (0, 900, 0)), (2, (0, 1800, 0)), (3, (0, 2600, 0)), (4, (0, 3240, 0)), (5, (0, 3700, 0))]},
+        "tail_rotor": {"rotation": [(0, Z3), (5, (5 * 2800, 0, 0))]},
+        "helicopter": {"position": [(0, (0, FLY, 0)), (1.8, (0, 12, 0), "catmullrom"), (3.2, (0, 1.5, 0), "catmullrom"),
+                                    (3.8, (0, -0.4, 0), "catmullrom"), (4.2, Z3, "catmullrom"), (5, Z3)],
+                       "rotation": [(0, Z3), (1.8, (-6, 0, 0), "catmullrom"), (3.2, (-2, 0, 0), "catmullrom"),
+                                    (3.8, (0.8, 0, 0), "catmullrom"), (4.2, Z3, "catmullrom"), (5, Z3)]},
+        "landing_gear": {"position": [(0, GD), (3.6, GD), (3.8, (0, 0.4, 0)), (4.2, Z3)]}}),
+    A("crash", 4.0, "hold_on_last_frame", {
+        "main_rotor": {"rotation": [(0, Z3), (1, (0, 800, 0)), (2, (0, 1450, 0)), (3, (0, 1900, 0)), (3.3, (0, 1990, 0)),
+                                    (4, (0, 2010, 0), "catmullrom")]},
+        "tail_rotor": {"rotation": [(0, Z3), (0.4, (500, 0, 0)), (0.6, (560, 0, 0))]},
+        "helicopter": {"position": [(0, (0, FLY, 0)), (1, (2, 28, 3), "catmullrom"), (2, (6, 18, 6), "catmullrom"),
+                                    (3, (8, 4, 8), "catmullrom"), (3.3, (8.5, 0, 8.5), "catmullrom"),
+                                    (3.5, (8.6, 1.2, 8.6), "catmullrom"), (4, (8.8, 0, 8.8), "catmullrom")],
+                       "rotation": [(0, Z3), (1, (6, 150, -4), "catmullrom"), (2, (10, 400, -8), "catmullrom"),
+                                    (3, (12, 600, -12), "catmullrom"), (3.3, (8, 640, -18), "catmullrom"),
+                                    (3.6, (4, 648, -16), "catmullrom"), (4, (5, 650, -17), "catmullrom")]},
+        "landing_gear": {"position": [(0, GD), (3.2, GD), (3.4, (0, 1.4, 0))]},
+        **{f"blade_{k}": {"rotation": [(0, Z3), (3.3, Z3), (3.5, (0, 0, -6 - 2 * k), "catmullrom"),
+                                       (4, (0, 0, -8 - 2 * k), "catmullrom")]} for k in range(4)}}),
 ]
+
+# --- проверка: ничего из интерьера не торчит сквозь обшивку
+
+
+def inside_hull(x, y, z, m):
+    if z < -61 or z > 105:
+        return False
+    w, tw, bw, yb, ybl, ybh, yt = prof(z)
+    return yb + m < y < yt - m and abs(x) < halfwidth(z, y) - m
+
+
+def all_uuids(g):
+    out = []
+    for c in g["children"]:
+        out += [c] if isinstance(c, str) else all_uuids(c)
+    return out
+
+
+bad = check_inside(all_uuids(G["cockpit"]) + all_uuids(G["cabin_interior"]), inside_hull)
+for name, p in bad:
+    print("  ! торчит наружу:", name, p)
+print("проверка интерьера:", "OK" if not bad else f"{len(bad)} элементов снаружи")
 
 tex_png = png_bytes()
 with open(os.path.join(HERE, "black_hawk_texture.png"), "wb") as f:

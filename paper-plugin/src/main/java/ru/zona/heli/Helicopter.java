@@ -380,6 +380,40 @@ public final class Helicopter implements InventoryHolder {
         updateShell();
         if (spawned && (moving() || rotor > 0 || doorsMoving || ticks % 40 == 0)) updateEntities(false);
         effects(pilot);
+        if (ticks % 10 == 0) hints();
+    }
+
+    /** Подсказки «ПКМ — ...» игрокам, которые подошли к двери, сиденью или складу. */
+    private void hints() {
+        Location center = new Location(world, pos.x, pos.y, pos.z);
+        for (Player p : world.getPlayers()) {
+            if (p.isInsideVehicle() || p.getLocation().distanceSquared(center) > 18 * 18) continue;
+            Location eye = p.getLocation();
+            HeliType.Hotspot best = null;
+            double bd = 2.4 * 2.4;
+            for (HeliType.Hotspot h : type.hotspots) {
+                Location l = hotspotLocation(h);
+                double d = l.distanceSquared(eye);
+                if (d < bd) {
+                    bd = d;
+                    best = h;
+                }
+            }
+            if (best == null) continue;
+            String text = switch (best.action()) {
+                case DOOR -> {
+                    HeliType.Door d = type.doors.get(best.door());
+                    yield "[ПКМ] " + (isOpen(best.door()) ? "Закрыть: " : "Открыть: ") + (d == null ? "дверь" : d.name());
+                }
+                case STORAGE -> "[ПКМ] Открыть склад";
+                case SEAT -> {
+                    HeliType.Seat seat = type.seats.get(best.seat());
+                    boolean busy = best.seat() < seats.size() && !seats.get(best.seat()).getPassengers().isEmpty();
+                    yield busy ? seat.name() + ": занято" : "[ПКМ] Сесть: " + seat.name();
+                }
+            };
+            p.sendActionBar(Component.text(text, NamedTextColor.YELLOW));
+        }
     }
 
     private boolean animate() {
