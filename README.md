@@ -50,7 +50,9 @@ TogetherForever — свободный форк приложения [Togetherly
 ## Как пользоваться
 
 1. **Сервер.** Нужен один на всех, кто будет пользоваться твоей сборкой. Инструкция:
-   [server/README.md](server/README.md) — бесплатный вариант на Oracle Cloud Always Free.
+   [server/README.md](server/README.md) — бесплатный вариант на Oracle Cloud Always Free
+   или [свой компьютер за туннелем](server/README.md#туннель-без-домена-и-без-открытых-портов)
+   (Tailscale Funnel / Cloudflare Tunnel, без домена и открытых портов).
 2. **Сборка приложения.** В репозитории: *Settings → Secrets and variables → Actions → Variables*
    → `PB_URL = https://твой-домен`. GitHub Actions сам соберёт APK и выложит его в
    [Releases](../../releases/latest).

@@ -4,6 +4,17 @@
 #   всё остальное          -> PocketBase
 # SITE_ADDRESS — домен (сертификат Let's Encrypt Caddy выпустит сам).
 # APP_HOST — где слушают PocketBase/hotpath/Centrifugo (в docker — pocketbase).
+#
+# За туннелем (Cloudflare Tunnel, Tailscale Funnel) SITE_ADDRESS=:80 — Caddy
+# отдаёт только HTTP, а HTTPS даёт туннель. Заголовки X-Forwarded-* от туннеля
+# (он подключается с частного адреса) считаем доверенными, чтобы PocketBase
+# видел настоящий IP клиента, а не адрес туннеля.
+{
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
 {$SITE_ADDRESS} {
 	encode zstd gzip
 

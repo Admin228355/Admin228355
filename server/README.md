@@ -5,7 +5,8 @@
 Centrifugo (реальное время) и Caddy (HTTPS-сертификат выпускается сам).
 
 Требования: Linux-сервер (Ubuntu 22.04/24.04), 1–2 ГБ памяти, домен,
-открытые порты 80 и 443.
+открытые порты 80 и 443. Нет домена или нельзя открыть порты (домашний
+компьютер, провайдер за NAT) — см. [«Туннель»](#туннель-без-домена-и-без-открытых-портов).
 
 ## Бесплатно: Oracle Cloud Always Free + DuckDNS
 
@@ -26,7 +27,7 @@ Oracle бесплатно и бессрочно даёт ARM-сервер (до 
    рядом со своим поддоменом на duckdns.org → *update ip*.
 5. **Установка.** Подключись к серверу по SSH и выполни:
    ```bash
-   git clone -b claude/affectionate-babbage-seyjvn https://github.com/Admin228355/Admin228355 togetherforever
+   git clone -b claude/gifted-cerf-hka1zf https://github.com/Admin228355/Admin228355 togetherforever
    cd togetherforever/server
    sudo ./install.sh togetherforever-ivan.duckdns.org твоя@почта.ru
    ```
@@ -36,6 +37,75 @@ Oracle бесплатно и бессрочно даёт ARM-сервер (до 
    Actions → Variables → New repository variable*: `PB_URL` =
    `https://togetherforever-ivan.duckdns.org`. Затем *Actions → Build
    TogetherForever APK → Run workflow*. Через ~15 минут APK появится в Releases.
+
+## Туннель: без домена и без открытых портов
+
+Подходит для домашнего компьютера, ноутбука или мини-ПК с Linux и Docker (на
+Windows — через WSL2 с Ubuntu). Белый IP и проброс портов на роутере не нужны:
+туннель сам подключается к интернету и выставляет сервер наружу по HTTPS.
+Сервер при этом живёт, пока включён компьютер.
+
+Установка в этом режиме отличается одним флагом:
+
+```bash
+sudo ./install.sh --tunnel <публичный-адрес> <твоя@почта.ru> [токен-cloudflare]
+```
+Caddy слушает только `http://127.0.0.1:8080`, сертификаты не выпускает, порты
+не открывает; HTTPS даёт туннель. Какой туннель выбрать:
+
+### A. Tailscale Funnel — постоянный адрес, домен не нужен
+1. Установи Tailscale и войди в аккаунт:
+   ```bash
+   curl -fsSL https://tailscale.com/install.sh | sh
+   sudo tailscale up
+   ```
+2. В [админке Tailscale](https://login.tailscale.com/admin/dns) включи *HTTPS
+   Certificates*. Если Funnel не включён, команда из шага 5 напечатает ссылку,
+   по которой его нужно разрешить.
+3. Узнай свой адрес — он выглядит как `имя.tailnet-xxxx.ts.net`:
+   ```bash
+   tailscale status --json | python3 -c "import json,sys; print(json.load(sys.stdin)['Self']['DNSName'].rstrip('.'))"
+   ```
+4. Поставь сервер с этим адресом:
+   ```bash
+   sudo ./install.sh --tunnel имя.tailnet-xxxx.ts.net твоя@почта.ru
+   ```
+5. Открой его наружу: `sudo tailscale funnel --bg 8080`.
+6. `PB_URL` в GitHub = `https://имя.tailnet-xxxx.ts.net`, затем запусти сборку APK.
+
+### B. Cloudflare Tunnel — постоянный адрес, нужен свой домен
+1. Бесплатный аккаунт на cloudflare.com и домен, добавленный в Cloudflare.
+2. В панели *Zero Trust* → раздел *Tunnels* → *Create a tunnel* → *Cloudflared*.
+   Скопируй токен (длинная строка, начинается с `eyJ`).
+3. В туннеле добавь *Public hostname*, например `love.example.com`; сервис —
+   `HTTP`, адрес `localhost:80`.
+4. Поставь сервер, передав токен последним аргументом — контейнер `cloudflared`
+   запустится вместе с остальными:
+   ```bash
+   sudo ./install.sh --tunnel love.example.com твоя@почта.ru ТОКЕН
+   ```
+5. `PB_URL` в GitHub = `https://love.example.com`, затем запусти сборку APK.
+
+По условиям Cloudflare на бесплатном тарифе один запрос не может быть больше
+100 МБ, поэтому очень тяжёлые видео через такой туннель не загрузятся.
+
+### C. Быстрый туннель (`trycloudflare.com`) — только чтобы проверить
+```bash
+cloudflared tunnel --url http://localhost:8080
+```
+Команда напечатает адрес вида `https://что-то.trycloudflare.com`. Для жизни он
+не годится: адрес случайный и **меняется при каждом запуске**, а он зашит в
+APK при сборке; Server-Sent Events не поддерживаются, запросов одновременно не
+больше 200, гарантий работы нет. Зато для проверки хватает: поставь сервер с
+любым именем (`sudo ./install.sh --tunnel test.example.com почта`), запусти
+команду выше и открой `https://что-то.trycloudflare.com/_/` — должна открыться
+админка. Если адрес сменился, а сервер остаётся:
+
+```bash
+./set-domain.sh новый-адрес
+```
+Скрипт обновит адрес в настройках сервера (`.env`, Centrifugo, письма). Данные
+он не трогает. `PB_URL` в GitHub придётся поменять и пересобрать APK.
 
 ## Другие варианты
 - **Любой VPS** (от ~150–300 ₽/мес): те же шаги 5–6, домен — DuckDNS или свой.

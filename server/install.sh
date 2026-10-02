@@ -7,16 +7,27 @@
 #
 # Домен должен уже смотреть на этот сервер (A-запись), а порты 80 и 443 —
 # быть открыты: сертификат HTTPS Caddy выпустит сам.
+#
+# Без домена и открытых портов — через туннель (см. README, раздел «Туннель»):
+#   sudo ./install.sh --tunnel публичный-адрес почта [токен-cloudflare]
+# Сервер слушает только 127.0.0.1:8080, а HTTPS даёт туннель.
 set -euo pipefail
 
+TUNNEL=0
+if [[ "${1:-}" == "--tunnel" ]]; then
+  TUNNEL=1
+  shift
+fi
 DOMAIN="${1:-}"
 ADMIN_EMAIL="${2:-}"
+CF_TOKEN="${3:-}"
 # Репозиторий, где лежат релизы APK (для ссылок «скачать» на страницах сервера).
 REPO_URL="${REPO_URL:-https://github.com/Admin228355/Admin228355}"
 cd "$(dirname "$0")"
 
 if [[ -z "$DOMAIN" || -z "$ADMIN_EMAIL" ]]; then
   echo "Использование: sudo ./install.sh <домен> <почта администратора>"
+  echo "      за туннелем: sudo ./install.sh --tunnel <публичный-адрес> <почта> [токен-cloudflare]"
   exit 1
 fi
 if [[ $EUID -ne 0 ]]; then
@@ -28,7 +39,8 @@ say() { printf '\n\033[1;35m==> %s\033[0m\n' "$*"; }
 
 # Образы Ubuntu в Oracle Cloud закрывают всё, кроме SSH, прямо в iptables —
 # даже когда порты открыты в панели облака. Открываем 80 и 443.
-if command -v iptables >/dev/null 2>&1; then
+# За туннелем наружу ничего открывать не нужно.
+if [[ $TUNNEL -eq 0 ]] && command -v iptables >/dev/null 2>&1; then
   for port in 80 443; do
     iptables -C INPUT -p tcp --dport "$port" -j ACCEPT 2>/dev/null \
       || iptables -I INPUT 1 -p tcp --dport "$port" -j ACCEPT
@@ -58,6 +70,15 @@ CENTRIFUGO_API_KEY=$(rnd)
 CENTRIFUGO_TOKEN_HMAC=$(rnd)
 ENV
   chmod 600 .env
+fi
+if [[ $TUNNEL -eq 1 ]]; then
+  say "Режим туннеля: слушаю только 127.0.0.1:8080, HTTPS даёт туннель"
+  sed -i '/^\(SITE_ADDRESS\|HTTP_BIND\|HTTPS_BIND\)=/d' .env
+  printf '%s\n' 'SITE_ADDRESS=:80' 'HTTP_BIND=127.0.0.1:8080' 'HTTPS_BIND=127.0.0.1:8443' >> .env
+  if [[ -n "$CF_TOKEN" ]]; then
+    sed -i '/^\(CLOUDFLARE_TUNNEL_TOKEN\|COMPOSE_PROFILES\)=/d' .env
+    printf '%s\n' "CLOUDFLARE_TUNNEL_TOKEN=$CF_TOKEN" 'COMPOSE_PROFILES=cloudflared' >> .env
+  fi
 fi
 set -a; . ./.env; set +a
 
@@ -97,6 +118,18 @@ say "Запускаю всё"
 docker compose up -d
 
 say "Готово!"
+if [[ $TUNNEL -eq 1 ]]; then
+  if [[ -n "$CF_TOKEN" ]]; then
+    TUNNEL_NOTE="  Туннель Cloudflare запущен вместе с сервером (контейнер cloudflared)."
+  else
+    TUNNEL_NOTE="  Сервер слушает http://127.0.0.1:8080 — направь туда туннель (README, «Туннель»)."
+  fi
+  cat <<DONE
+
+$TUNNEL_NOTE
+  Если адрес туннеля изменится:  ./set-domain.sh новый-адрес
+DONE
+fi
 cat <<DONE
 
   Сервер:        https://$DOMAIN

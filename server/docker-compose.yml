@@ -4,6 +4,10 @@
 # (network_mode: service:pocketbase), как у автора на одном сервере: хуки
 # PocketBase зовут hotpath по 127.0.0.1:8120, hotpath ходит в PocketBase и
 # Centrifugo тоже по 127.0.0.1. Наружу открыты только 80 и 443 (Caddy).
+#
+# Режим «за туннелем» (./install.sh --tunnel ...): Caddy слушает только HTTP,
+# порты привязаны к 127.0.0.1 (HTTP_BIND / HTTPS_BIND в .env), а HTTPS даёт
+# сам туннель (Cloudflare Tunnel, Tailscale Funnel).
 name: togetherforever
 
 services:
@@ -29,9 +33,9 @@ services:
         REPO_URL: ${REPO_URL:-https://github.com/Admin228355/Admin228355}
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
+      - "${HTTP_BIND:-0.0.0.0:80}:80"
+      - "${HTTPS_BIND:-0.0.0.0:443}:443"
+      - "${HTTPS_BIND:-0.0.0.0:443}:443/udp"
       - "127.0.0.1:8090:8090"
     environment:
       CENTRIFUGO_API: http://127.0.0.1:8000/api
@@ -80,8 +84,21 @@ services:
     restart: unless-stopped
     network_mode: service:pocketbase
     environment:
-      SITE_ADDRESS: ${DOMAIN}
+      SITE_ADDRESS: ${SITE_ADDRESS:-${DOMAIN}}
       APP_HOST: 127.0.0.1
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./data/caddy:/data
+
+  # Только для Cloudflare Tunnel с токеном (включается через COMPOSE_PROFILES
+  # в .env). В панели Cloudflare у туннеля сервис — http://localhost:80.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["cloudflared"]
+    restart: unless-stopped
+    network_mode: service:pocketbase
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - caddy
